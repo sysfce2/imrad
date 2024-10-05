@@ -2,6 +2,10 @@
 ![img](https://github.com/tpecholt/imrad/actions/workflows/ubuntu.yml/badge.svg)
 
 # ImRAD
+<div align="center">
+<img src="./src/icon.png" alt="logo" width="150" align="center">
+</div>
+<br>
 
 ImRAD is a GUI builder for the ImGui library. It generates and parses C++ code which can be directly used in your application.  
 
@@ -110,13 +114,25 @@ Somewhat older version can be downloaded from [Releases](https://github.com/tpec
 2. Set imrad as startup project, set its working directory to the installed folder
 3. Debug & Run
 
+# How to use generated code
+
+Add all generated code into your project. Generated code #includes `imrad.h` so you need to set an include directory and point it to the include folder in the ImRAD installation folder. Based on your setup set project-wide preprocessor defines `IMRAD_WITH_GLFW`/`IMRAD_WITH_STB`/`IMRAD_WITH_FMT`.
+
+Add dependency to ImGui and GLFW (whether you build it as separate libraries or directly add to your project is up to you). Stb and fmt dependencies are optional.
+
+Please check [wiki](https://github.com/tpecholt/imrad/wiki) for tutorials and more detailed content.
+
 # Screenshots
 
 ![screen1](https://github.com/tpecholt/imrad/blob/main/doc/screen1.png)
 
-# More information
+# Sponsorship
 
-Please check [wiki](https://github.com/tpecholt/imrad/wiki) for tutorials and more detailed content
+Development of ImRAD happens in my free time outside of my regular job, yoga, volunteering and other activities. 
+
+If you like the tool and want to support its further development please do. If you use it regularly you can even setup a monthly donation if it's convenient for you.
+
+[![kofi_button_black](https://github.com/user-attachments/assets/67a4a74a-0c06-425a-be98-55da20f05181)](https://ko-fi.com/tope99)
 
 # Credits
 
