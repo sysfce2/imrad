@@ -18,6 +18,10 @@
 
   * adds onDrawItems event
 
+* Image
+
+  * adds border, rounding styles
+
 ### Tutorials
 
 * updated

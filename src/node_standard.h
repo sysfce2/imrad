@@ -487,6 +487,8 @@ struct Image : Widget
     bindable<ImRad::Texture> texture;
     enum StretchPolicy { None, Scale, FitIn, FitOut };
     direct_val<StretchPolicy> stretchPolicy = Scale;
+    direct_val<pzdimension_t> style_imageBorderSize;
+    direct_val<pzdimension_t> style_imageRounding;
     std::string absoluteFileName;
     ImRad::Texture tex;
 

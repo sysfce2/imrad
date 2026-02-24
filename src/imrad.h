@@ -1484,6 +1484,7 @@ void LoadStyle(const std::string& spath, float fontScaling, ImGuiStyle* dst, std
                 READ_FLT(GrabMinSize);
                 READ_FLT(GrabRounding);
                 READ_FLT(ImageBorderSize);
+                READ_FLT(ImageRounding);
                 READ_FLT(TabRounding);
                 READ_FLT(TabBorderSize);
                 READ_FLT(TabMinWidthBase);

@@ -6657,7 +6657,19 @@ ImDrawList* Image::DoDraw(UIContext& ctx)
         uv0 = { -(wrel - 1) / 2, -(hrel - 1) / 2 };
         uv1 = { 1 + (wrel - 1) / 2, 1 + (hrel - 1) / 2 };
     }
+
+    if (!style_imageBorderSize.empty())
+        ImGui::PushStyleVar(ImGuiStyleVar_ImageBorderSize, style_imageBorderSize.eval_px(ctx));
+    if (!style_imageRounding.empty())
+        ImGui::PushStyleVar(ImGuiStyleVar_ImageRounding, style_imageRounding.eval_px(ctx));
+
     ImGui::Image(tex.id, { w, h }, uv0, uv1);
+
+    if (!style_imageBorderSize.empty())
+        ImGui::PopStyleVar();
+    if (!style_imageRounding.empty())
+        ImGui::PopStyleVar();
+
     return ImGui::GetWindowDrawList();
 }
 
@@ -6665,13 +6677,20 @@ void Image::DoExport(std::ostream& os, UIContext& ctx)
 {
     if (texture.empty())
         PushError(ctx, "texture field empty");
-    if (fileName.empty())
-        PushError(ctx, "fileName empty");
 
-    os << ctx.ind << "if (!" << texture.to_arg() << ")\n";
-    ctx.ind_up();
-    os << ctx.ind << texture.to_arg() << " = ImRad::LoadTextureFromFile(" << fileName.to_arg() << ");\n";
-    ctx.ind_down();
+    if (!fileName.empty()) {
+        os << ctx.ind << "if (!" << texture.to_arg() << ")\n";
+        ctx.ind_up();
+        os << ctx.ind << texture.to_arg() << " = ImRad::LoadTextureFromFile(" << fileName.to_arg() << ");\n";
+        ctx.ind_down();
+    }
+
+    if (!style_imageBorderSize.empty())
+        os << ctx.ind << "ImGui::PushStyleVar(ImGuiStyleVar_ImageBorderSize, "
+            << style_imageBorderSize.to_arg(ctx.unit) << ");\n";
+    if (!style_imageRounding.empty())
+        os << ctx.ind << "ImGui::PushStyleVar(ImGuiStyleVar_ImageRounding, "
+        << style_imageRounding.to_arg(ctx.unit) << ");\n";
 
     os << ctx.ind << "ImGui::Image(" << texture.to_arg() << ".id, { ";
 
@@ -6712,6 +6731,11 @@ void Image::DoExport(std::ostream& os, UIContext& ctx)
         stretchPolicy == FitIn ? "StretchPolicy::FitIn" :
         stretchPolicy == FitOut ? "StretchPolicy::FitOut" : "";
     os << "); //" << sp << "\n";
+
+    if (!style_imageBorderSize.empty())
+        os << ctx.ind << "ImGui::PopStyleVar();\n";
+    if (!style_imageRounding.empty())
+        os << ctx.ind << "ImGui::PopStyleVar();\n";
 }
 
 void Image::DoImport(const cpp::stmt_iterator& sit, UIContext& ctx)
@@ -6721,6 +6745,13 @@ void Image::DoImport(const cpp::stmt_iterator& sit, UIContext& ctx)
         auto i = sit->line.find("ImRad::LoadTextureFromFile(");
         if (i != std::string::npos)
             fileName.set_from_arg(sit->line.substr(i + 27, sit->line.size() - 1 - i - 27));
+    }
+    else if (sit->kind == cpp::CallExpr && sit->callee == "ImGui::PushStyleVar")
+    {
+        if (sit->params.size() >= 2 && sit->params[0] == "ImGuiStyleVar_ImageBorderSize")
+            style_imageBorderSize.set_from_arg(sit->params[1]);
+        else if (sit->params.size() >= 2 && sit->params[0] == "ImGuiStyleVar_ImageRounding")
+            style_imageRounding.set_from_arg(sit->params[1]);
     }
     else if (sit->kind == cpp::CallExpr && sit->callee == "ImGui::Image")
     {
@@ -6765,6 +6796,8 @@ Image::Properties()
 {
     auto props = Widget::Properties();
     props.insert(props.begin(), {
+        { "appearance.border", &style_imageBorderSize },
+        { "appearance.rounding", &style_imageRounding },
         { "behavior.fileName#1", &fileName, true },
         { "behavior.stretchPolicy", &stretchPolicy },
         { "bindings.texture#1", &texture },
@@ -6779,6 +6812,18 @@ bool Image::PropertyUI(int i, UIContext& ctx)
     switch (i)
     {
     case 0:
+        ImGui::Text("border");
+        ImGui::TableNextColumn();
+        ImGui::SetNextItemWidth(-ImGui::GetFrameHeight());
+        changed = InputDirectVal(&style_imageBorderSize, ctx);
+        break;
+    case 1:
+        ImGui::Text("rouding");
+        ImGui::TableNextColumn();
+        ImGui::SetNextItemWidth(-ImGui::GetFrameHeight());
+        changed = InputDirectVal(&style_imageRounding, ctx);
+        break;
+    case 2:
         ImGui::Text("fileName");
         ImGui::TableNextColumn();
         ImGui::SetNextItemWidth(-ImGui::GetFrameHeight());
@@ -6797,14 +6842,14 @@ bool Image::PropertyUI(int i, UIContext& ctx)
         if (changed)
             RefreshTexture(ctx);
         break;
-    case 1:
+    case 3:
         ImGui::Text("stretchPolicy");
         ImGui::TableNextColumn();
         ImGui::SetNextItemWidth(-ImGui::GetFrameHeight());
         fl = stretchPolicy != Defaults().stretchPolicy ? InputDirectVal_Modified : 0;
         changed = InputDirectValEnum(&stretchPolicy, fl, ctx);
         break;
-    case 2:
+    case 4:
         ImGui::Text("texture");
         ImGui::TableNextColumn();
         ImGui::SetNextItemWidth(-ImGui::GetFrameHeight());
@@ -6814,7 +6859,7 @@ bool Image::PropertyUI(int i, UIContext& ctx)
         changed |= BindingButton("texture", &texture, BindingButton_ReferenceOnly, ctx);
         break;
     default:
-        return Widget::PropertyUI(i - 3, ctx);
+        return Widget::PropertyUI(i - 5, ctx);
     }
     return changed;
 }
