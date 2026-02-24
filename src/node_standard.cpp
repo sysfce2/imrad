@@ -1200,21 +1200,22 @@ void Widget::Draw(UIContext& ctx)
             ctx.selected.size() == 1 && ctx.selected[0] == this)
         {
             int resizeMode = 0;
-            ImVec2 mousePos = ImGui::IsMouseDown(ImGuiMouseButton_Left) ?
+            const ImVec2 mousePos = ImGui::IsMouseDown(ImGuiMouseButton_Left) ?
                 ImGui::GetIO().MouseClickedPos[ImGuiMouseButton_Left] :
                 ImGui::GetMousePos();
+           const float threshold = 5 * ImGui::GetStyle().FontScaleDpi;
             if ((Behavior() & HasSizeX) && size_x.has_value())
             {
-                if (std::abs(mousePos.x - cached_pos.x) < 5)
+                if (std::abs(mousePos.x - cached_pos.x) < threshold)
                     resizeMode |= UIContext::ItemSizingLeft;
-                else if (std::abs(mousePos.x - cached_pos.x - cached_size.x) < 5)
+                else if (std::abs(mousePos.x - cached_pos.x - cached_size.x) < threshold)
                     resizeMode |= UIContext::ItemSizingRight;
             }
             if ((Behavior() & HasSizeY) && size_y.has_value())
             {
-                if (std::abs(mousePos.y - cached_pos.y) < 5)
+                if (std::abs(mousePos.y - cached_pos.y) < threshold)
                     resizeMode |= UIContext::ItemSizingTop;
-                if (std::abs(mousePos.y - cached_pos.y - cached_size.y) < 5)
+                if (std::abs(mousePos.y - cached_pos.y - cached_size.y) < threshold)
                     resizeMode |= UIContext::ItemSizingBottom;
             }
             if (resizeMode)
@@ -1316,10 +1317,11 @@ void Widget::Draw(UIContext& ctx)
             *ctx.modified = true;
             ImVec2 delta = ImGui::GetMouseDragDelta() / ctx.zoomFactor;
             ImVec2 sp = ImGui::GetStyle().ItemSpacing;
+            const float threshold = 5 * ImGui::GetStyle().FontScaleDpi;
             if (!sp.x)
-                sp.x = 5;
+                sp.x = threshold;
             if (!sp.y)
-                sp.y = 5;
+                sp.y = threshold;
             ImGuiWindow* win = ImGui::GetCurrentWindow();
             if (ctx.mode & (UIContext::ItemSizingLeft | UIContext::ItemSizingRight))
             {

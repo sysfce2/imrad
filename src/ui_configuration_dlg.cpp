@@ -329,7 +329,6 @@ void ConfigurationDlg::StyleCombo_DrawItems()
 
 void ConfigurationDlg::AddStyleButton_Change()
 {
-    newStyleDlg.title = "New Style";
     newStyleDlg.name = "";
     newStyleDlg.source = defaultStyle;
     newStyleDlg.sources = styles;

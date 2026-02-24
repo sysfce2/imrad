@@ -15,7 +15,6 @@ public:
     std::string name;
     std::string source;
     std::vector<std::string> sources;
-    std::string title;
     /// @end interface
 
 private:

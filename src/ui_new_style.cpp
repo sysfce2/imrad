@@ -45,7 +45,7 @@ void NewStyleDlg::Draw()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 10, 10 });
     ImGui::SetNextWindowSize({ 0, 0 }); //{ 250, 120 }
     bool tmpOpen = true;
-    if (ImGui::BeginPopupModal(ImRad::Format("{}###NewStyleDlg", title).c_str(), &tmpOpen, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize))
+    if (ImGui::BeginPopupModal("New Style###NewStyleDlg", &tmpOpen, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize))
     {
         if (ImRad::GetUserData().activeActivity != "")
             ImRad::RenderDimmedBackground(ImRad::GetUserData().WorkRect(), ImRad::GetUserData().dimBgRatio);

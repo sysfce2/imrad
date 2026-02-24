@@ -45,6 +45,7 @@
 #include "ui_new_file_dlg.h"
 #include "ui_select_resource.h"
 #include "ui_configuration_dlg.h"
+#include "ui_new_style.h"
 
 #define IMRAD_H_IMPLEMENTATION
 #include "imrad.h"
@@ -1139,33 +1140,56 @@ bool CopyStyle(const std::string& from, const std::string& name, std::string& er
     }
 }
 
-/*void CloneStyle()
+void CloneStyle()
 {
-    inputName.title = "Clone Style";
-    inputName.hint = "Enter new style name";
-    inputName.OpenPopup([](ImRad::ModalResult mr)
-        {
-            std::string path = rootPath + "/style/" + inputName.name + ".ini";
-            if (fs::exists(u8string(path))) {
-                messageBox.title = "Confirmation";
-                messageBox.icon = MessageBox::Info;
-                messageBox.message = "Overwrite existing style?";
-                messageBox.buttons = ImRad::Yes | ImRad::No;
-                messageBox.OpenPopup([=](ImRad::ModalResult mr) {
-                    if (mr == ImRad::Yes)
-                        DoCloneStyle(inputName.name);
-                    });
-            }
-            else
-                DoCloneStyle(inputName.name);
+    const auto& file = fileTabs[activeTab];
+    std::string styleName = file.configs[file.activeConfig].styleName;
+    newStyleDlg.name = "";
+    newStyleDlg.source = styleName;
+    newStyleDlg.sources.clear();
+    for (const auto& st : styleNames)
+        newStyleDlg.sources.push_back(st.first);
+
+    newStyleDlg.OpenPopup([](ImRad::ModalResult mr) {
+        std::string error;
+        if (!CopyStyle(newStyleDlg.source, newStyleDlg.name, error)) {
+            messageBox.title = "error";
+            messageBox.icon = MessageBox::Warning;
+            messageBox.message = error;
+            messageBox.buttons = ImRad::Ok;
+            messageBox.OpenPopup();
+            return;
+        }
+        GetStyles();
+        auto st = stx::find_if(styleNames, [&](const auto& st) { return st.first == newStyleDlg.name; });
+        if (st == styleNames.end())
+            return;
+        auto& file = fileTabs[activeTab];
+        file.configs[file.activeConfig].styleName = st->first;
+        reloadStyle = true;
+        ShellExec(st->second);
         });
-}*/
+}
 
 void EditStyle()
 {
     const auto& file = fileTabs[activeTab];
-    std::string path = rootPath + "/style/" + file.configs[file.activeConfig].styleName + ".ini";
-    ShellExec(path);
+    std::string styleName = file.configs[file.activeConfig].styleName;
+    auto st = stx::find_if(styleNames, [&](const auto& st) { return st.first == styleName; });
+    if (st == styleNames.end())
+        return;
+    if (st->second == "") {
+        messageBox.icon = MessageBox::Info;
+        messageBox.title = "error";
+        messageBox.message = "ImGui stock style \"" + styleName + "\" can't be edited directly. Clone the style?";
+        messageBox.buttons = ImRad::Yes | ImRad::No;
+        messageBox.OpenPopup([=](ImRad::ModalResult mr) {
+            if (mr == ImRad::Yes)
+                CloneStyle();
+            });
+        return;
+    }
+    ShellExec(st->second);
 }
 
 void EditConfigurations()
@@ -1478,12 +1502,10 @@ void ToolbarUI()
     ImGui::SameLine();
     std::string thisStyle = thisFile ? thisFile->configs[thisFile->activeConfig].styleName : "";
     auto stit = stx::find_if(styleNames, [&](auto& st) { return st.first == thisStyle; });
-    ImGui::BeginDisabled(stit == styleNames.end() || stit->second.empty());
     if (ImGui::Button(ICON_FA_PALETTE))
         EditStyle();
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
         ImGui::SetTooltip(("Edit style \"" + thisStyle + "\"").c_str());
-    ImGui::EndDisabled();
 
     ImGui::EndDisabled();
 
@@ -2063,6 +2085,8 @@ void PopupUI()
     selectResource.Draw();
 
     configurationDlg.Draw();
+
+    newStyleDlg.Draw();
 }
 
 void Draw()
