@@ -777,7 +777,7 @@ bool IsItemDoubleClicked()
 
 bool IsItemContextMenuClicked()
 {
-    return ImGui::IsMouseReleased(ImGuiPopupFlags_MouseButtonDefault_) &&
+    return ImGui::IsMouseReleased(ImGuiMouseButton_Right) &&
         ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup);
 }
 

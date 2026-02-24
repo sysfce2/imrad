@@ -982,7 +982,7 @@ void LoadStyle()
     std::string stylePath = rootPath + "/style/";
     float mainScale = ImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor()); // Valid on GLFW 3.3+ only
 
-    SetWaitCursor();
+    ImGui::SetMouseCursor(ImGuiMouseCursor_Wait);
     io.Fonts->Clear();
 
     //reload ImRAD UI first
