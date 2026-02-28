@@ -214,6 +214,7 @@ struct MenuIt : Widget
 {
     direct_val<bool> ownerDraw = false;
     direct_val<std::string> label = "Item";
+    direct_val<std::string> icon = "";
     direct_val<shortcut_t> shortcut = "";
     direct_val<bool> separator = false;
     bindable<bool> checked;

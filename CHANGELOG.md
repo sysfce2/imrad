@@ -22,6 +22,14 @@
 
   * adds border, rounding styles
 
+* Input
+
+  * adds textCursor color
+
+* MenuItem
+
+  * adds icon
+
 ### Tutorials
 
 * updated

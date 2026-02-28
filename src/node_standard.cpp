@@ -4975,6 +4975,9 @@ void Input::DoExport(std::ostream& os, UIContext& ctx)
     if (!value.is_reference())
         PushError(ctx, "value only supports l-values");
 
+    if (!style_textCursor.empty())
+        os << ctx.ind << "ImGui::PushStyleColor(ImGuiCol_InputTextCursor, " << style_textCursor.to_arg() << ");\n";
+
     bool multiLine = flags & ImGuiInputTextFlags_Multiline;
     if (!multiLine)
         os << ctx.ind << "ImGui::SetNextItemWidth(" << size_x.to_arg(ctx.unit, ctx.stretchSizeExpr[0]) << ");\n";
@@ -5102,6 +5105,9 @@ void Input::DoExport(std::ostream& os, UIContext& ctx)
         os << ctx.ind << onImeAction.to_arg() << "();\n";
         ctx.ind_down();
     }
+
+    if (!style_textCursor.empty())
+        os << ctx.ind << "ImGui::PopStyleColor();\n";
 }
 
 void Input::DoImport(const cpp::stmt_iterator& sit, UIContext& ctx)
@@ -5201,7 +5207,7 @@ void Input::DoImport(const cpp::stmt_iterator& sit, UIContext& ctx)
         }
     }
     else if ((sit->kind == cpp::CallExpr && !sit->callee.compare(0, 12, "ImGui::Input")) ||
-            (sit->kind == cpp::IfCallThenCall && !sit->callee.compare(0, 12, "ImGui::Input")))
+        (sit->kind == cpp::IfCallThenCall && !sit->callee.compare(0, 12, "ImGui::Input")))
     {
         std::string tid = sit->callee.substr(12);
         tid[0] = std::tolower(tid[0]);
@@ -5240,7 +5246,7 @@ void Input::DoImport(const cpp::stmt_iterator& sit, UIContext& ctx)
     }
     else if (sit->kind == cpp::CallExpr && //for compatibility only
         (!sit->callee.compare(sit->callee.size() - 5, 5, ".Draw") ||
-        !sit->callee.compare(sit->callee.size() - 13, 13, ".DrawWithHint")))
+            !sit->callee.compare(sit->callee.size() - 13, 13, ".DrawWithHint")))
     {
         type.set_id("ImGuiTextFilter");
         size_t i = sit->callee.rfind('.');
@@ -5259,6 +5265,11 @@ void Input::DoImport(const cpp::stmt_iterator& sit, UIContext& ctx)
     {
         if (sit->params.size())
             size_x.set_from_arg(sit->params[0]);
+    }
+    else if (sit->kind == cpp::CallExpr && sit->callee == "ImGui::PushStyleColor")
+    {
+        if (sit->params.size() >= 2 && sit->params[0] == "ImGuiCol_InputTextCursor")
+            style_textCursor.set_from_arg(sit->params[1]);
     }
     else if ((sit->kind == cpp::IfCallStmt || sit->kind == cpp::IfCallThenCall) &&
         sit->callee == "ImGui::IsItemActive")
@@ -5299,6 +5310,7 @@ Input::Properties()
     props.insert(props.begin(), {
         { "appearance.text", &style_text },
         { "appearance.frameBg", &style_frameBg },
+        { "appearance.textCursor", &style_textCursor },
         { "appearance.border", &style_border },
         { "appearance.borderSize", &style_frameBorderSize },
         { "appearance.font.summary", nullptr },
@@ -5340,6 +5352,14 @@ bool Input::PropertyUI(int i, UIContext& ctx)
         changed |= BindingButton("frameBg", &style_frameBg, ctx);
         break;
     case 2:
+        ImGui::Text("textCursor");
+        ImGui::TableNextColumn();
+        ImGui::SetNextItemWidth(-ImGui::GetFrameHeight());
+        changed = InputBindable(&style_textCursor, ImGuiCol_InputTextCursor, ctx);
+        ImGui::SameLine(0, 0);
+        changed |= BindingButton("textCursor", &style_textCursor, ctx);
+        break;
+    case 3:
         ImGui::Text("border");
         ImGui::TableNextColumn();
         ImGui::SetNextItemWidth(-ImGui::GetFrameHeight());
@@ -5347,18 +5367,18 @@ bool Input::PropertyUI(int i, UIContext& ctx)
         ImGui::SameLine(0, 0);
         changed |= BindingButton("border", &style_border, ctx);
         break;
-    case 3:
+    case 4:
         ImGui::Text("borderSize");
         ImGui::TableNextColumn();
         ImGui::SetNextItemWidth(-ImGui::GetFrameHeight());
         changed = InputDirectVal(&style_frameBorderSize, ctx);
         break;
-    case 4:
+    case 5:
         ImGui::Text("font");
         ImGui::TableNextColumn();
         TextFontInfo(ctx);
         break;
-    case 5:
+    case 6:
         ImGui::Text("name");
         ImGui::TableNextColumn();
         ImGui::SetNextItemWidth(-ImGui::GetFrameHeight());
@@ -5366,7 +5386,7 @@ bool Input::PropertyUI(int i, UIContext& ctx)
         ImGui::SameLine(0, 0);
         changed |= BindingButton("font", &style_fontName, ctx);
         break;
-    case 6:
+    case 7:
         ImGui::Text("size");
         ImGui::TableNextColumn();
         ImGui::SetNextItemWidth(-ImGui::GetFrameHeight());
@@ -5374,16 +5394,16 @@ bool Input::PropertyUI(int i, UIContext& ctx)
         ImGui::SameLine(0, 0);
         changed |= BindingButton("font_size", &style_fontSize, ctx);
         break;
-    case 7:
+    case 8:
         changed = InputDirectValFlags("flags", &flags, Defaults().flags, ctx);
         break;
-    case 8:
+    case 9:
         ImGui::Text("label");
         ImGui::TableNextColumn();
         ImGui::SetNextItemWidth(-ImGui::GetFrameHeight());
         changed = InputDirectVal(&label, InputDirectVal_Modified, ctx);
         break;
-    case 9:
+    case 10:
         ImGui::Text("type");
         ImGui::TableNextColumn();
         ImGui::SetNextItemWidth(-ImGui::GetFrameHeight());
@@ -5394,7 +5414,7 @@ bool Input::PropertyUI(int i, UIContext& ctx)
             ctx.codeGen->ChangeVar(value.c_str(), type.get_id(), "");
         }
         break;
-    case 10:
+    case 11:
         ImGui::BeginDisabled(
             (tid != "std::string" && tid != "ImGuiTextFilter") ||
             (flags & ImGuiInputTextFlags_Multiline)
@@ -5407,7 +5427,7 @@ bool Input::PropertyUI(int i, UIContext& ctx)
         changed |= BindingButton("hint", &hint, ctx);
         ImGui::EndDisabled();
         break;
-    case 11:
+    case 12:
     {
         int type = imeType & 0xff;
         int action = imeType & (~0xff);
@@ -5430,7 +5450,7 @@ bool Input::PropertyUI(int i, UIContext& ctx)
             });
         break;
     }
-    case 12:
+    case 13:
     {
         ImGui::BeginDisabled(tid != "int" && tid != "float" && tid != "double");
         ImGui::Text("step");
@@ -5449,7 +5469,7 @@ bool Input::PropertyUI(int i, UIContext& ctx)
         ImGui::EndDisabled();
         break;
     }
-    case 13:
+    case 14:
         ImGui::BeginDisabled(tid.compare(0, 5, "float") && tid.compare(0, 6, "double"));
         ImGui::Text("format");
         ImGui::TableNextColumn();
@@ -5458,7 +5478,7 @@ bool Input::PropertyUI(int i, UIContext& ctx)
         changed = InputDirectVal(&format, fl, ctx);
         ImGui::EndDisabled();
         break;
-    case 14:
+    case 15:
         ImGui::Text("value");
         ImGui::TableNextColumn();
         ImGui::SetNextItemWidth(-ImGui::GetFrameHeight());
@@ -5468,7 +5488,7 @@ bool Input::PropertyUI(int i, UIContext& ctx)
         changed |= BindingButton("value", &value, tid, BindingButton_ReferenceOnly, ctx);
         break;
     default:
-        return Widget::PropertyUI(i - 15, ctx);
+        return Widget::PropertyUI(i - 16, ctx);
     }
     return changed;
 }

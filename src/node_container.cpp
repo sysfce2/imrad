@@ -2923,7 +2923,7 @@ ImDrawList* MenuIt::DoDraw(UIContext& ctx)
         const UINode* par = ctx.parents[ctx.parents.size() - 2];
         bool mbm = dynamic_cast<const MenuBar*>(par); //menu bar item
 
-        ImGui::MenuItem(label.c_str());
+        ImGui::MenuItemEx(label.c_str(), icon.empty() ? nullptr : icon.c_str());
 
         if (!mbm)
         {
@@ -2971,7 +2971,7 @@ ImDrawList* MenuIt::DoDraw(UIContext& ctx)
     {
         bool check = !checked.empty();
         auto ps = PrepareString(label.value());
-        ImGui::MenuItem(ps.label.c_str(), shortcut.c_str(), check);
+        ImGui::MenuItemEx(ps.label.c_str(), icon.empty() ? nullptr : icon.c_str(), shortcut.c_str(), check);
         DrawTextArgs(ps, ctx);
     }
     ImGui::PopStyleVar();
@@ -3073,8 +3073,12 @@ void MenuIt::DoExport(std::ostream& os, UIContext& ctx)
 
     if (children.size())
     {
-        os << ctx.ind << "if (ImGui::BeginMenu(" << label.to_arg() << "))\n";
-        os << ctx.ind << "{\n";
+        os << ctx.ind << "if (";
+        if (icon.empty())
+            os << "ImGui::BeginMenu(" << label.to_arg();
+        else
+            os << "ImGui::BeginMenuEx(" << label.to_arg() << ", " << icon.to_arg();
+        os << "))\n" << ctx.ind << "{\n";
         ctx.ind_up();
         os << ctx.ind << "/// @separator\n\n";
 
@@ -3098,9 +3102,11 @@ void MenuIt::DoExport(std::ostream& os, UIContext& ctx)
         os << ctx.ind;
         if (ifstmt)
             os << "if (";
-
-        os << "ImGui::MenuItem(" << label.to_arg() << ", \""
-            << shortcut.c_str() << "\", ";
+        if (icon.empty())
+            os << "ImGui::MenuItem(" << label.to_arg();
+        else
+            os << "ImGui::MenuItemEx(" << label.to_arg() << ", " << icon.to_arg();
+        os << ", \"" << shortcut.c_str() << "\", ";
         if (checked.is_reference())
             os << "&" << checked.to_arg();
         else if (!checked.empty())
@@ -3159,16 +3165,19 @@ void MenuIt::DoImport(const cpp::stmt_iterator& sit, UIContext& ctx)
     {
         PushError(ctx, "ContextMenu protocol changed. Please replace top level \"@ MenuIt\" tags with \"@ ContextMenu\" tags manually");
     }
-    else if ((sit->kind == cpp::CallExpr && sit->callee == "ImGui::MenuItem") ||
-        (sit->kind == cpp::IfCallThenCall && sit->callee == "ImGui::MenuItem"))
+    else if ((sit->kind == cpp::CallExpr || sit->kind == cpp::IfCallThenCall) &&
+        (sit->callee == "ImGui::MenuItem" || sit->callee == "ImGui::MenuItemEx"))
     {
+        bool ex = sit->callee == "ImGui::MenuItemEx";
         if (sit->params.size())
             label.set_from_arg(sit->params[0]);
-        if (sit->params.size() >= 2 && cpp::is_cstr(sit->params[1]))
-            *shortcut.access() = sit->params[1].substr(1, sit->params[1].size() - 2);
-        if (sit->params.size() >= 3) {
-            bool amp = !sit->params[2].compare(0, 1, "&");
-            checked.set_from_arg(sit->params[2].substr(amp));
+        if (sit->params.size() >= 2 && ex)
+            icon.set_from_arg(sit->params[1]);
+        if (sit->params.size() >= 2+ex && cpp::is_cstr(sit->params[1+ex]))
+            *shortcut.access() = sit->params[1+ex].substr(1, sit->params[1+ex].size() - 2);
+        if (sit->params.size() >= 3+ex) {
+            bool amp = !sit->params[2+ex].compare(0, 1, "&");
+            checked.set_from_arg(sit->params[2+ex].substr(amp));
             if (checked.has_value() && !checked.value())
                 checked.set_from_arg("");
         }
@@ -3199,6 +3208,7 @@ MenuIt::Properties()
     props.insert(props.begin(), {
         { "behavior.ownerDraw", &ownerDraw },
         { "behavior.label", &label, true },
+        { "behavior.icon", &icon },
         { "behavior.shortcut", &shortcut },
         { "behavior.separator", &separator },
         { "bindings.checked##1", &checked },
@@ -3228,6 +3238,14 @@ bool MenuIt::PropertyUI(int i, UIContext& ctx)
         ImGui::EndDisabled();
         break;
     case 2:
+        ImGui::BeginDisabled(ownerDraw);
+        ImGui::Text("icon");
+        ImGui::TableNextColumn();
+        ImGui::SetNextItemWidth(-ImGui::GetFrameHeight());
+        changed = InputDirectVal(&icon, InputDirectVal_Modified, ctx);
+        ImGui::EndDisabled();
+        break;
+    case 3:
         ImGui::BeginDisabled(ownerDraw || children.size());
         ImGui::Text("shortcut");
         ImGui::TableNextColumn();
@@ -3236,14 +3254,14 @@ bool MenuIt::PropertyUI(int i, UIContext& ctx)
         changed = InputDirectVal(&shortcut, fl, ctx);
         ImGui::EndDisabled();
         break;
-    case 3:
+    case 4:
         ImGui::Text("separator");
         ImGui::TableNextColumn();
         ImGui::SetNextItemWidth(-ImGui::GetFrameHeight());
         fl = separator != Defaults().separator ? InputDirectVal_Modified : 0;
         changed = InputDirectVal(&separator, fl, ctx);
         break;
-    case 4:
+    case 5:
         ImGui::BeginDisabled(ownerDraw || children.size());
         ImGui::Text("checked");
         ImGui::TableNextColumn();
@@ -3255,7 +3273,7 @@ bool MenuIt::PropertyUI(int i, UIContext& ctx)
         ImGui::EndDisabled();
         break;
     default:
-        return Widget::PropertyUI(i - 5, ctx);
+        return Widget::PropertyUI(i - 6, ctx);
     }
     return changed;
 }

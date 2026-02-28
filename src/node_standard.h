@@ -372,6 +372,7 @@ struct Input : Widget
     direct_val<float> step = 1;
     direct_val<std::string> format = "%.3f";
     direct_val<ImGuiInputTextFlags_> flags;
+    bindable<color_t> style_textCursor;
     event<> onChange;
     event<> onImeAction;
     event<int(ImGuiInputTextCallbackData&)> onCallback;
