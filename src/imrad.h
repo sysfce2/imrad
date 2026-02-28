@@ -1374,6 +1374,9 @@ void SaveStyle(const std::string& spath, const ImGuiStyle* src, const std::map<s
     WRITE_FLT(GrabMinSize);
     WRITE_FLT(GrabRounding);
     WRITE_FLT(ImageBorderSize);
+#if IMGUI_VERSION_NUM >= 19250
+    WRITE_FLT(ImageRounding);
+#endif
     WRITE_FLT(TabRounding);
     WRITE_FLT(TabBorderSize);
     WRITE_FLT(TabMinWidthBase);
@@ -1484,7 +1487,9 @@ void LoadStyle(const std::string& spath, float fontScaling, ImGuiStyle* dst, std
                 READ_FLT(GrabMinSize);
                 READ_FLT(GrabRounding);
                 READ_FLT(ImageBorderSize);
+#if IMGUI_VERSION_NUM >= 19250
                 READ_FLT(ImageRounding);
+#endif
                 READ_FLT(TabRounding);
                 READ_FLT(TabBorderSize);
                 READ_FLT(TabMinWidthBase);

@@ -1317,10 +1317,11 @@ void DockspaceUI()
         ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(root_id, ImGuiDir_Left, 300.f / (viewport->Size.x - 350), nullptr, &root_id);
         ImGuiID dock_id_right1, dock_id_right2;
         ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Up, 230.f / (viewport->Size.y - tbSize), &dock_id_right1, &dock_id_right2);
-        float vh = viewport->Size.y - tbSize;
-        ImGuiID dock_id_top = ImGui::DockBuilderSplitNode(root_id, ImGuiDir_Up, tabSize / vh, nullptr, &root_id);
+        //float vh = viewport->Size.y - tbSize;
+        //tabBar height depends on dpi so it shouldn't be saved in dockspace layout
+        //ImGuiID dock_id_top = ImGui::DockBuilderSplitNode(root_id, ImGuiDir_Up, tabSize / vh, nullptr, &root_id);
 
-        ImGui::DockBuilderDockWindow("FileTabs", dock_id_top);
+        //ImGui::DockBuilderDockWindow("FileTabs", dock_id_top);
         ImGui::DockBuilderDockWindow("Hierarchy", dock_id_left);
         ImGui::DockBuilderDockWindow("Explorer", dock_id_left);
         ImGui::DockBuilderDockWindow("Widgets", dock_id_right1);
@@ -1331,7 +1332,7 @@ void DockspaceUI()
 
     ImGui::DockSpace(dockspace_id, { 0.0f, 0.0f }, ImGuiDockNodeFlags_PassthruCentralNode | ImGuiDockNodeFlags_NoDockingOverCentralNode);
     ImGuiDockNode* cn = ImGui::DockBuilderGetCentralNode(dockspace_id);
-    ctx.designAreaMin = cn->Pos;
+    ctx.designAreaMin = cn->Pos + ImVec2(0, tabSize);
     ctx.designAreaMax = cn->Pos + cn->Size;
 
     if (fileTabs.empty())
@@ -1412,7 +1413,11 @@ void ToolbarUI()
         | ImGuiWindowFlags_NoSavedSettings
         ;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImGui::GetStyleColorVec4(ImGuiCol_TitleBgActive));
     ImGui::Begin("TOOLBAR", nullptr, window_flags);
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
     ImGui::PopStyleVar();
 
     const auto& io = ImGui::GetIO();
@@ -1611,23 +1616,26 @@ void ToolbarUI()
 void TabsUI()
 {
     ImGuiWindowFlags window_flags = 0
-        //| ImGuiWindowFlags_NoDocking
+        | ImGuiWindowFlags_NoDocking
         | ImGuiWindowFlags_NoTitleBar
         | ImGuiWindowFlags_NoResize
         | ImGuiWindowFlags_NoCollapse
         | ImGuiWindowFlags_NoMove
         | ImGuiWindowFlags_NoScrollbar
-        //| ImGuiWindowFlags_NoSavedSettings
+        | ImGuiWindowFlags_NoSavedSettings
         ;
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 0.0f));
-    ImGuiWindowClass window_class;
-    window_class.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_NoTabBar | ImGuiDockNodeFlags_NoResize;
-    ImGui::SetNextWindowClass(&window_class);
-    ImGui::SetNextWindowSize({ 0, tabSize });
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, { 0, 0 });
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 4, 0.0f });
+    ImGui::SetNextWindowPos({ ctx.designAreaMin.x, ctx.designAreaMin.y - tabSize });
+    ImGui::SetNextWindowSize({ ctx.designAreaMax.x - ctx.designAreaMin.x, tabSize });
     ImGui::Begin("FileTabs", 0, window_flags);
+    ImGui::PopStyleVar(4);
+    ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
     if (ImGui::BeginTabBar(".Tabs", ImGuiTabBarFlags_NoTabListScrollingButtons | ImGuiTabBarFlags_Reorderable))
     {
-        ImGui::PopStyleVar();
+        //ImGui::PopStyleVar();
         int untitled = 0;
         for (int i = 0; i < (int)fileTabs.size(); ++i)
         {
@@ -1649,11 +1657,11 @@ void TabsUI()
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0, 10 });
             if (ImGui::BeginPopup(popupId.c_str()))
             {
-                /*if (ImGui::MenuItem("Save", "Ctrl+S"))
-                {
-                    ActivateTab(i);
-                    SaveFile();
-                }*/
+                //if (ImGui::MenuItem("Save", "Ctrl+S"))
+                //{
+                //    ActivateTab(i);
+                //    SaveFile();
+                //}
                 if (ImGui::MenuItem("Close", "Ctrl+F4"))
                 {
                     ActivateTab(i);
@@ -1666,9 +1674,9 @@ void TabsUI()
                     CloseFile(CLOSE_ALL_BUT_PREVIOUS);
                 }
                 ImGui::Separator();
-                if (ImGui::MenuItem("Copy Full Path"))
+                if (ImGui::MenuItemEx("Copy Full Path", ICON_FA_COPY))
                     ImGui::SetClipboardText(("\"" + tab.fname + "\"").c_str());
-                if (ImGui::MenuItem("Open Containing Folder"))
+                if (ImGui::MenuItemEx("Open Containing Folder", ICON_FA_FOLDER_TREE"  "))
                     ShellExec(u8string(u8path(tab.fname).parent_path()));
 
                 ImGui::EndPopup();
@@ -1695,8 +1703,7 @@ void TabsUI()
         }
         ImGui::EndTabBar();
     }
-    else
-        ImGui::PopStyleVar();
+    ImGui::PopItemFlag();
     ImGui::End();
 }
 
