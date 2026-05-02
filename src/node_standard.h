@@ -3,10 +3,10 @@
 #include <memory>
 #include <optional>
 #include <imgui.h>
+#include <IconsFontAwesome6.h>
 #include "uicontext.h"
 #include "binding_property.h"
 #include "imrad.h"
-#include "IconsFontAwesome6.h"
 
 extern const float DEFAULT_ITEM_WIDTH;
 extern const float DEFAULT_MIN_WIDTH;
@@ -20,9 +20,9 @@ struct PreparedString
     std::vector<std::pair<size_t, size_t>> fmtArgs;
     bool error = false;
 };
-PreparedString PrepareString(std::string_view s);
+PreparedString PrepareString(std::string_view s, bool limitLength = true);
 
-#define DRAW_STR(a) PrepareString(a.value()).label.c_str()
+#define DRAW_STR(a) PrepareString(a.display_string()).label.c_str()
 
 void DrawTextArgs(const PreparedString& ps, UIContext& ctx, const ImVec2& offset = { 0, 0 }, const ImVec2& size = { 0, 0 }, const ImVec2& align = { 0, 0 });
 
@@ -218,7 +218,8 @@ struct Widget : UINode
     virtual void DoExport(std::ostream& os, UIContext& ctx) = 0;
     virtual void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx) = 0;
     virtual void CalcSizeEx(ImVec2 p1, UIContext& ctx);
-    virtual const char* GetIcon() const { return ""; }
+    virtual const char* GetIcon() { return ""; }
+    virtual bool IsTranslated() { return false; }
 };
 
 struct Spacer : Widget
@@ -231,7 +232,8 @@ struct Spacer : Widget
     void DoExport(std::ostream&, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
     int Behavior() { return Widget::Behavior() | HasSizeX | HasSizeY; }
-    const char* GetIcon() const { return ICON_FA_LEFT_RIGHT; }
+    bool IsTranslated() { return true; }
+    const char* GetIcon() { return ICON_FA_LEFT_RIGHT; }
     const Spacer& Defaults() { static Spacer var(UIContext::Defaults()); return var; }
 };
 
@@ -250,7 +252,8 @@ struct Separator : Widget
     bool PropertyUI(int, UIContext& ctx);
     void DoExport(std::ostream&, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
-    const char* GetIcon() const { return ICON_FA_MINUS; }
+    bool IsTranslated() { return label.has_tr() || label.has_single_variable(); }
+    const char* GetIcon() { return ICON_FA_MINUS; }
     const Separator& Defaults() { static Separator var(UIContext::Defaults()); return var; }
 };
 
@@ -274,7 +277,8 @@ struct Text : Widget
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
     int Behavior();
     void CalcSizeEx(ImVec2 p1, UIContext& ctx);
-    const char* GetIcon() const { return ICON_FA_FONT; }
+    bool IsTranslated() { return text.has_tr() || text.has_single_variable(); }
+    const char* GetIcon() { return ICON_FA_FONT; }
     const Text& Defaults() { static Text var(UIContext::Defaults()); return var; }
 };
 
@@ -303,7 +307,8 @@ struct Selectable : Widget
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
     void CalcSizeEx(ImVec2 p1, UIContext& ctx);
     int Behavior() { return Widget::Behavior() | HasSizeX | HasSizeY | SnapItemInterior; }
-    const char* GetIcon() const { return ICON_FA_AUDIO_DESCRIPTION; }
+    bool IsTranslated() { return label.has_tr() || label.has_single_variable() || label.empty(); }
+    const char* GetIcon() { return ICON_FA_AUDIO_DESCRIPTION; }
     const Selectable& Defaults() { static Selectable var(UIContext::Defaults()); return var; }
 };
 
@@ -328,7 +333,8 @@ struct Button : Widget
     void DoExport(std::ostream& os, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
     int Behavior();
-    const char* GetIcon() const { return ICON_FA_CIRCLE_PLAY; }
+    bool IsTranslated() { return label.has_tr() || label.has_single_variable(); }
+    const char* GetIcon() { return ICON_FA_CIRCLE_PLAY; }
     const Button& Defaults() { static Button var(UIContext::Defaults()); return var; }
 };
 
@@ -348,7 +354,8 @@ struct CheckBox : Widget
     bool EventUI(int i, UIContext& ctx);
     void DoExport(std::ostream& os, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
-    const char* GetIcon() const { return ICON_FA_SQUARE_CHECK; }
+    bool IsTranslated() { return label.has_tr() || label.has_single_variable(); }
+    const char* GetIcon() { return ICON_FA_SQUARE_CHECK; }
     const CheckBox& Defaults() { static CheckBox var(UIContext::Defaults()); return var; }
 };
 
@@ -369,7 +376,8 @@ struct RadioButton : Widget
     bool EventUI(int i, UIContext& ctx);
     void DoExport(std::ostream& os, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
-    const char* GetIcon() const { return ICON_FA_CIRCLE_DOT; }
+    bool IsTranslated() { return label.has_tr() || label.has_single_variable(); }
+    const char* GetIcon() { return ICON_FA_CIRCLE_DOT; }
     const RadioButton& Defaults() { static RadioButton var(UIContext::Defaults()); return var; }
 };
 
@@ -401,7 +409,8 @@ struct Input : Widget
     void DoExport(std::ostream& os, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
     int Behavior();
-    const char* GetIcon() const { return "|a_|"; }
+    bool IsTranslated();
+    const char* GetIcon() { return "|a_|"; }
     const Input& Defaults() { static Input var(UIContext::Defaults()); return var; }
 };
 
@@ -424,7 +433,8 @@ struct Combo : Widget
     void DoExport(std::ostream& os, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
     int Behavior() { return Widget::Behavior() | HasSizeX; }
-    const char* GetIcon() const { return ICON_FA_SQUARE_CARET_DOWN; }
+    bool IsTranslated();
+    const char* GetIcon() { return ICON_FA_SQUARE_CARET_DOWN; }
     const Combo& Defaults() { static Combo var(UIContext::Defaults()); return var; }
 };
 
@@ -449,7 +459,8 @@ struct Slider : Widget
     void DoExport(std::ostream& os, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
     int Behavior() { return Widget::Behavior() | HasSizeX; }
-    const char* GetIcon() const { return ICON_FA_SLIDERS; }
+    bool IsTranslated() { return label.empty(); }
+    const char* GetIcon() { return ICON_FA_SLIDERS; }
     const Slider& Defaults() { static Slider var(UIContext::Defaults()); return var; }
 };
 
@@ -467,7 +478,8 @@ struct ProgressBar : Widget
     void DoExport(std::ostream& os, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
     int Behavior() { return Widget::Behavior() | HasSizeX | HasSizeY; }
-    const char* GetIcon() const { return ICON_FA_BATTERY_HALF; }
+    bool IsTranslated() { return true; }
+    const char* GetIcon() { return ICON_FA_BATTERY_HALF; }
     const ProgressBar& Defaults() { static ProgressBar var(UIContext::Defaults()); return var; }
 };
 
@@ -489,7 +501,8 @@ struct ColorEdit : Widget
     void DoExport(std::ostream& os, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
     int Behavior() { return Widget::Behavior() | HasSizeX; }
-    const char* GetIcon() const { return ICON_FA_CIRCLE_HALF_STROKE; }
+    bool IsTranslated() { return label.empty(); }
+    const char* GetIcon() { return ICON_FA_CIRCLE_HALF_STROKE; }
     const ColorEdit& Defaults() { static ColorEdit var(UIContext::Defaults()); return var; }
 };
 
@@ -514,7 +527,8 @@ struct Image : Widget
     void RefreshTexture(UIContext& ctx);
     bool PickFileName(UIContext& ctx);
     int Behavior() { return Widget::Behavior() | HasSizeX | HasSizeY; }
-    const char* GetIcon() const { return ICON_FA_IMAGE; }
+    bool IsTranslated() { return true; }
+    const char* GetIcon() { return ICON_FA_IMAGE; }
     const Image& Defaults() { static Image var(UIContext::Defaults()); return var; }
     std::string FindPath(const std::string& url, UIContext& ctx, std::string* rname = nullptr);
 };
@@ -534,6 +548,7 @@ struct CustomWidget : Widget
     void DoExport(std::ostream& os, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
     int Behavior() { return Widget::Behavior() | HasSizeX | HasSizeY; }
-    const char* GetIcon() const { return ICON_FA_EXPAND; }
+    bool IsTranslated() { return true; }
+    const char* GetIcon() { return ICON_FA_EXPAND; }
     const CustomWidget& Defaults() { static CustomWidget var(UIContext::Defaults()); return var; }
 };

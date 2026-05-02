@@ -75,7 +75,7 @@ void TopWindow::Draw(UIContext& ctx)
     ctx.kind = kind;
     ctx.contextMenus.clear();
 
-    std::string cap = title.value();
+    std::string cap = title.display_string();
     cap += "###TopWindow" + std::to_string((size_t)this); //don't clash
     int fl = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoSavedSettings;
     if (ctx.mode != UIContext::NormalSelection)
@@ -92,6 +92,8 @@ void TopWindow::Draw(UIContext& ctx)
 
     if (!style_fontName.empty() || !style_fontSize.empty())
         ImGui::PushFont(style_fontName.eval(ctx), style_fontSize.eval(ctx));
+    if (ctx.showUntranslated && !IsTranslated())
+        ImGui::PushStyleColor(ImGuiCol_Text, ctx.colors[UIContext::Color::DrawArgs]);
     if (style_padding.has_value())
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style_padding.eval_px(ctx));
     if (style_spacing.has_value())
@@ -141,6 +143,8 @@ void TopWindow::Draw(UIContext& ctx)
     bool tmp;
     ImGui::Begin(cap.c_str(), &tmp, fl);
 
+    if (ctx.showUntranslated && !IsTranslated())
+        ImGui::PopStyleColor();
     if (style_titlePadding.has_value())
         ImGui::PopStyleVar();
 
@@ -386,9 +390,15 @@ void TopWindow::Export(std::ostream& os, UIContext& ctx)
 
     //provide stable ID when title changes
     bindable<std::string> titleId = title;
-    if (titleId.access()->find("##") == std::string::npos)
+    if (title.has_tr()) {
+        std::string singular = title.tr_singular() + "###" + ctx.codeGen->GetName();
+        std::string plural = title.tr_plural() + "###" + ctx.codeGen->GetName();
+        titleId.set_tr(title.tr_context(), singular, plural, title.tr_pvar());
+    }
+    else {
         *titleId.access() += "###" + ctx.codeGen->GetName();
-    std::string tit = titleId.to_arg();
+    }
+    std::string caption = titleId.to_arg();
     bool hasMB = children.size() && dynamic_cast<MenuBar*>(children[0].get());
     bool autoSize = flags & ImGuiWindowFlags_AlwaysAutoResize;
 
@@ -435,7 +445,7 @@ void TopWindow::Export(std::ostream& os, UIContext& ctx)
         auto fl = flags;
         fl |= ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings;
         os << ctx.ind << "bool tmpOpen;\n";
-        os << ctx.ind << "if (ImGui::Begin(\"###" << ctx.codeGen->GetName() << "\", &tmpOpen, " << fl.to_arg() << "))\n";
+        os << ctx.ind << "if (ImGui::Begin(" << caption << ", &tmpOpen, " << fl.to_arg() << "))\n";
         os << ctx.ind << "{\n";
         ctx.ind_up();
         os << ctx.ind << "ImGui::PopStyleVar();\n";
@@ -504,7 +514,7 @@ void TopWindow::Export(std::ostream& os, UIContext& ctx)
         auto fl = flags;
         fl |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings;
         os << ctx.ind << "bool tmpOpen;\n";
-        os << ctx.ind << "if (ImGui::Begin(\"###" << ctx.codeGen->GetName() << "\", &tmpOpen, " << fl.to_arg() << "))\n";
+        os << ctx.ind << "if (ImGui::Begin(" << caption << ", &tmpOpen, " << fl.to_arg() << "))\n";
         os << ctx.ind << "{\n";
         ctx.ind_up();
         os << ctx.ind << "ImGui::PopStyleVar();\n";
@@ -516,7 +526,7 @@ void TopWindow::Export(std::ostream& os, UIContext& ctx)
         if (!onBackButton.empty()) {
             os << ctx.ind << "if (ImGui::IsKeyPressed(ImGuiKey_AppBack))\n";
             ctx.ind_up();
-            os << ctx.ind << onBackButton.to_arg() << "();\n";
+            os << ctx.ind << onBackButton.to_arg() << ";\n";
             ctx.ind_down();
         }
     }
@@ -585,7 +595,7 @@ void TopWindow::Export(std::ostream& os, UIContext& ctx)
             os << ctx.ind << "ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, " <<
                 style_titlePadding.to_arg(ctx.unit) << ");\n";
         }
-        os << ctx.ind << "if (ImGui::Begin(" << tit << ", &isOpen, " << flags.to_arg() << "))\n";
+        os << ctx.ind << "if (ImGui::Begin(" << caption << ", &isOpen, " << flags.to_arg() << "))\n";
         os << ctx.ind << "{\n";
         ctx.ind_up();
         if (style_titlePadding.has_value())
@@ -682,7 +692,7 @@ void TopWindow::Export(std::ostream& os, UIContext& ctx)
                     style_titlePadding.to_arg(ctx.unit) << ");\n";
             }
             os << ctx.ind << "bool tmpOpen = true;\n";
-            os << ctx.ind << "if (ImGui::BeginPopupModal(" << tit << ", &tmpOpen, " << flags.to_arg() << "))\n";
+            os << ctx.ind << "if (ImGui::BeginPopupModal(" << caption << ", &tmpOpen, " << flags.to_arg() << "))\n";
             os << ctx.ind << "{\n";
             ctx.ind_up();
             if (style_titlePadding.has_value())
@@ -693,7 +703,7 @@ void TopWindow::Export(std::ostream& os, UIContext& ctx)
         }
         else
         {
-            os << ctx.ind << "if (ImGui::BeginPopup(" << tit << ", " << flags.to_arg() << "))\n";
+            os << ctx.ind << "if (ImGui::BeginPopup(" << caption << ", " << flags.to_arg() << "))\n";
             os << ctx.ind << "{\n";
             ctx.ind_up();
         }
@@ -725,7 +735,7 @@ void TopWindow::Export(std::ostream& os, UIContext& ctx)
         {
             os << ctx.ind << "if (ImGui::IsKeyPressed(ImGuiKey_AppBack))\n";
             ctx.ind_up();
-            os << ctx.ind << onBackButton.to_arg() << "();\n";
+            os << ctx.ind << onBackButton.to_arg() << ";\n";
             ctx.ind_down();
         }
 
@@ -793,7 +803,7 @@ void TopWindow::Export(std::ostream& os, UIContext& ctx)
     {
         os << ctx.ind << "if (ImGui::IsWindowAppearing())\n";
         ctx.ind_up();
-        os << ctx.ind << onWindowAppearing.to_arg() << "();\n";
+        os << ctx.ind << onWindowAppearing.to_arg() << ";\n";
         ctx.ind_down();
     }
 
@@ -1085,9 +1095,21 @@ void TopWindow::Import(cpp::stmt_iterator& sit, UIContext& ctx)
         {
             ctx.kind = kind = ModalPopup;
             title.set_from_arg(sit->params[0]);
-            size_t i = title.access()->rfind("###");
-            if (i != std::string::npos)
-                title.access()->resize(i);
+            if (title.has_tr()) {
+                size_t i = title.tr_singular().rfind("###");
+                if (i == std::string::npos)
+                    i = title.tr_singular().size();
+                size_t j = title.tr_plural().rfind("###");
+                if (j == std::string::npos)
+                    j = title.tr_plural().size();
+                title.set_tr(title.tr_context(), title.tr_singular().substr(0, i),
+                    title.tr_plural().substr(0, j), title.tr_pvar());
+            }
+            else {
+                size_t i = title.access()->rfind("###");
+                if (i != std::string::npos)
+                    title.access()->resize(i);
+            }
 
             if (sit->params.size() >= 3) {
                 if (!flags.set_from_arg(sit->params[2]))
@@ -1099,9 +1121,21 @@ void TopWindow::Import(cpp::stmt_iterator& sit, UIContext& ctx)
         {
             ctx.kind = kind = Popup;
             title.set_from_arg(sit->params[0]);
-            size_t i = title.access()->rfind("###");
-            if (i != std::string::npos)
-                title.access()->resize(i);
+            if (title.has_tr()) {
+                size_t i = title.tr_singular().rfind("###");
+                if (i == std::string::npos)
+                    i = title.tr_singular().size();
+                size_t j = title.tr_plural().rfind("###");
+                if (j == std::string::npos)
+                    j = title.tr_plural().size();
+                title.set_tr(title.tr_context(), title.tr_singular().substr(0, i),
+                    title.tr_plural().substr(0, j), title.tr_pvar());
+            }
+            else {
+                size_t i = title.access()->rfind("###");
+                if (i != std::string::npos)
+                    title.access()->resize(i);
+            }
 
             if (sit->params.size() >= 2) {
                 if (!flags.set_from_arg(sit->params[1]))
@@ -1133,9 +1167,21 @@ void TopWindow::Import(cpp::stmt_iterator& sit, UIContext& ctx)
             else {
                 ctx.kind = kind = Window;
                 title.set_from_arg(sit->params[0]);
-                size_t i = title.access()->rfind("###");
-                if (i != std::string::npos)
-                    title.access()->resize(i);
+                if (title.has_tr()) {
+                    size_t i = title.tr_singular().rfind("###");
+                    if (i == std::string::npos)
+                        i = title.tr_singular().size();
+                    size_t j = title.tr_plural().rfind("###");
+                    if (j == std::string::npos)
+                        j = title.tr_plural().size();
+                    title.set_tr(title.tr_context(), title.tr_singular().substr(0, i),
+                        title.tr_plural().substr(0, j), title.tr_pvar());
+                }
+                else {
+                    size_t i = title.access()->rfind("###");
+                    if (i != std::string::npos)
+                        title.access()->resize(i);
+                }
             }
         }
 
@@ -1182,6 +1228,11 @@ void TopWindow::Import(cpp::stmt_iterator& sit, UIContext& ctx)
 
     userCodeAfter = ctx.userCode;
     ctx.createVars = tmpCreateDeps;
+}
+
+bool TopWindow::IsTranslated()
+{
+    return title.has_tr();
 }
 
 void TopWindow::TreeUI(UIContext& ctx)
@@ -1461,7 +1512,7 @@ bool TopWindow::PropertyUI(int i, UIContext& ctx)
         break;
     case 19:
         ImGui::BeginDisabled(animation != MoveHoriz && animation != MoveVert);
-        ImGui::Text("screenIndex");
+        ImGui::Text("sequenceNumber");
         ImGui::TableNextColumn();
         fl = animOrder != Defaults().animOrder ? InputDirectVal_Modified : 0;
         changed = InputDirectVal(&animOrder, fl, ctx);

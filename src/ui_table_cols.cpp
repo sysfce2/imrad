@@ -95,7 +95,7 @@ void TableCols::Draw()
 
                     /// @begin Selectable
                     ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, { 0, 0 });
-                    if (ImRad::Selectable(ImRad::Format("{}", _item.label==""?"<empty>":_item.label.c_str()).c_str(), i==sel, ImGuiSelectableFlags_NoAutoClosePopups | ImGuiSelectableFlags_SpanAllColumns, { 0, 0 }))
+                    if (ImRad::Selectable(ImRad::Format("{}", _item.label==""?"<empty>":_item.label.display_string()).c_str(), i==sel, ImGuiSelectableFlags_NoAutoClosePopups | ImGuiSelectableFlags_SpanAllColumns, { 0, 0 }))
                     {
                         Selectable_Change();
                     }
@@ -275,7 +275,9 @@ void TableCols::Properties_Draw(const ImRad::CustomWidgetArgs& args)
     ImGui::PushStyleColor(ImGuiCol_Button, clr);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 0, 0 });
     ImVec2 framePad = ImGui::GetStyle().FramePadding;
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { framePad.x * 0.5f, framePad.y * 0.5f });
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, 0.5f * framePad);
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, { 2, 2 }); // ensure checkbox is not overdrawn by input navbox above
+    float sideWidth = ImGui::GetFontSize();// +ImGui::GetStyle().CellFrame.x;
 
     ImVec2 pgMin = ImGui::GetCursorScreenPos();
     static float pgHeight = 0;
@@ -285,7 +287,7 @@ void TableCols::Properties_Draw(const ImRad::CustomWidgetArgs& args)
     {
         ImGui::GetWindowDrawList()->AddRectFilled(
             pgMin,
-            { pgMin.x + ImGui::GetStyle().IndentSpacing + 1, pgMin.y + pgHeight },
+            { pgMin.x + sideWidth + 1, pgMin.y + pgHeight },
             borderClr
         );
         ImGui::TableSetupColumn("name", ImGuiTableColumnFlags_WidthStretch);
@@ -299,12 +301,14 @@ void TableCols::Properties_Draw(const ImRad::CustomWidgetArgs& args)
         ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
             ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_TableBorderLight)));
         ImGui::PushStyleColor(ImGuiCol_NavCursor, 0x0);
+        ImGui::SetCursorPosX(ImGui::GetStyle().CellPadding.x);
         ImGui::SetNextItemOpen(true);
+        ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, ImGui::GetFontSize());
         bool open = ImGui::TreeNodeEx("Behavior", ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_DefaultOpen);
         ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
         ImGui::PopFont();
         ImGui::PopStyleVar();
-        //ImGui::Indent();
 
         if (sel >= 0 && open)
         {
@@ -325,7 +329,7 @@ void TableCols::Properties_Draw(const ImRad::CustomWidgetArgs& args)
         pgHeight = ImGui::GetItemRectSize().y;
     }
 
-    ImGui::PopStyleVar(2);
+    ImGui::PopStyleVar(3);
     ImGui::PopStyleColor(3);
 }
 

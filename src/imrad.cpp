@@ -46,6 +46,7 @@
 #include "ui_select_resource.h"
 #include "ui_configuration_dlg.h"
 #include "ui_new_style.h"
+#include "ui_text_edit.h"
 
 #define IMRAD_H_IMPLEMENTATION
 #include "imrad.h"
@@ -62,6 +63,7 @@ static void glfw_error_callback(int error, const char* description)
 const std::string UNTITLED = "Untitled";
 const std::string DEFAULT_STYLE = "Dark";
 const std::string DEFAULT_UNIT = "dp";
+const std::string DEFAULT_CFG_NAME = "(Default)";
 const char* INI_FILE_NAME = "imgui.ini";
 
 struct File
@@ -786,9 +788,14 @@ void StyleColorsImRad()
     ImGuiStyle& style = ImGui::GetStyle();
 
     style.Alpha = 1.0f;
-    style.FrameRounding = 3.0f;
-    style.WindowRounding = 3.f;
-    style.ScaleAllSizes(1 / 1.25f); //will be DPI scaled later
+    //These will be DPI scaled later. Use at least 4px since common 125% scaling
+    //won't scale 3px at all
+    style.FrameRounding = 3;
+    style.WindowRounding = 4;
+    style.WindowPadding = { 6, 6 };
+    style.ItemSpacing = { 6, 4 };
+    style.ScrollbarSize = 11;
+    style.ScrollbarRounding = 6;
 
     style.Colors[ImGuiCol_Text] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
     style.Colors[ImGuiCol_TextDisabled] = ImVec4(0.40f, 0.40f, 0.40f, 1.00f);
@@ -1240,6 +1247,7 @@ void EditConfigurations()
     auto& file = fileTabs[activeTab];
     TopWindow::Kind kind = file.configs[0].rootNode->kind; //guaranteed to be same
     std::string activeConfigName = file.configs[file.activeConfig].name;
+    file.modified = true;
 
     configurationDlg.copyStyleFun = CopyStyle;
     configurationDlg.defaultStyle = DEFAULT_STYLE;
@@ -1456,6 +1464,7 @@ void ToolbarUI()
         ;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
+    //ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImGui::GetStyle().WindowPadding * 0.5f);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImGui::GetStyleColorVec4(ImGuiCol_TitleBgActive));
     ImGui::Begin("TOOLBAR", nullptr, window_flags);
     ImGui::PopStyleColor();
@@ -1467,15 +1476,13 @@ void ToolbarUI()
     {
         NewFile();
     }
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
-        ImGui::SetTooltip("New File (Ctrl+N)");
+    ImGui::SetItemTooltip("New File (Ctrl+N)");
 
     ImGui::SameLine();
     if (ImGui::Button(ICON_FA_FOLDER_OPEN) ||
         ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_O, ImGuiInputFlags_RouteGlobal))
         OpenFile();
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
-        ImGui::SetTooltip("Open File (Ctrl+O)");
+    ImGui::SetItemTooltip("Open File (Ctrl+O)");
 
     ImGui::BeginDisabled(activeTab < 0);
 
@@ -1486,8 +1493,7 @@ void ToolbarUI()
         ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S, ImGuiInputFlags_RouteGlobal))
         SaveFile();
     //ImGui::EndDisabled();
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
-        ImGui::SetTooltip("Save File (Ctrl+S)");
+    ImGui::SetItemTooltip("Save File (Ctrl+S)");
 
     ImGui::SameLine(0, 0);
     ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
@@ -1525,8 +1531,8 @@ void ToolbarUI()
         const auto& cfg = thisFile->configs[thisFile->activeConfig];
         cfgName = cfg.name;
         if (cfgName == "")
-            cfgName = "(Default)";
-        cfgHint = "\"" + cfg.styleName + "\" @ " + cfg.unit + "";
+            cfgName = DEFAULT_CFG_NAME;
+        cfgHint = "style=\"" + cfg.styleName + "\" unit=" + cfg.unit + "";
     }
     if (ImGui::BeginCombo("##configuration", cfgName.c_str()))
     {
@@ -1534,7 +1540,7 @@ void ToolbarUI()
         {
             cfgName = thisFile->configs[i].name;
             if (cfgName == "")
-                cfgName = "(Default)";
+                cfgName = DEFAULT_CFG_NAME;
             if (ImGui::Selectable(cfgName.c_str(), i == thisFile->activeConfig))
             {
                 thisFile->activeConfig = (int)i;
@@ -1554,8 +1560,7 @@ void ToolbarUI()
     auto stit = stx::find_if(styleNames, [&](auto& st) { return st.first == thisStyle; });
     if (ImGui::Button(ICON_FA_PALETTE))
         EditStyle();
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
-        ImGui::SetTooltip(("Edit style \"" + thisStyle + "\"").c_str());
+    ImGui::SetItemTooltip(("Edit style \"" + thisStyle + "\"").c_str());
 
     ImGui::EndDisabled();
 
@@ -1566,8 +1571,7 @@ void ToolbarUI()
     if (ImGui::Button(ICON_FA_BOLT) || // ICON_FA_BOLT, ICON_FA_RIGHT_TO_BRACKET) ||
         ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_P, ImGuiInputFlags_RouteGlobal))
         ShowCode();
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
-        ImGui::SetTooltip("Preview Code (Ctrl+P)");
+    ImGui::SetItemTooltip("Preview Code (Ctrl+P)");
 
     ImGui::SameLine();
     if (ImGui::Button(ICON_FA_CUBES))
@@ -1579,8 +1583,20 @@ void ToolbarUI()
             classWizard.roots.push_back(cfg.rootNode.get());
         classWizard.OpenPopup();
     }
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
-        ImGui::SetTooltip("Class Wizard");
+    ImGui::SetItemTooltip("Class Wizard");
+
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Button,
+        ImGui::GetStyleColorVec4(ctx.showUntranslated ? ImGuiCol_ButtonActive : ImGuiCol_Button));
+    if (ImGui::Button(ICON_FA_GLOBE)) //TEXT_SLASH))
+    {
+        ctx.showUntranslated = !ctx.showUntranslated;
+    }
+    ImGui::PopStyleColor();
+    ImGui::SetItemTooltip("Show untranslated strings");
+
+    ImGui::SameLine(0, 2 * ImGui::GetStyle().ItemSpacing.x);
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
 
     ImGui::SameLine();
     bool showHelper = activeTab >= 0 &&
@@ -1602,18 +1618,17 @@ void ToolbarUI()
         horizLayout.OpenPopup();
     }
     ImGui::EndDisabled();
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
-        ImGui::SetTooltip("Table Layout Helper");
-    ImGui::SameLine();
+    ImGui::SetItemTooltip("Table Layout Helper");
 
     ImGui::EndDisabled();
 
-    ImGui::SameLine();
+    ImGui::SameLine(0, 2 * ImGui::GetStyle().ItemSpacing.x);
     ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
 
     ImGui::SameLine();
     if (ImGui::Button(ICON_FA_GEAR))
         OpenSettings();
+    ImGui::SetItemTooltip("Settings");
 
     ImGui::SameLine();
     float defHeight = ImGui::GetFrameHeightWithSpacing();
@@ -1624,15 +1639,18 @@ void ToolbarUI()
         aboutDlg.OpenPopup();
     }
 
+    //ImGui::PopStyleVar();
     ImGui::End();
 
-    const float BTN_SIZE = ImGui::GetFontSize() * 1.7f;
+    //Widgets palette
+    const float BTN_SIZE = ImGui::GetFontSize() * 1.8f;
     float sp = ImGui::GetStyle().ItemSpacing.x;
     ImGui::SetNextWindowPos({ viewport->Size.x - 520, 100 }, ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize({ 140, 260 }, ImGuiCond_FirstUseEver);
     ImGui::Begin("Widgets", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
     int n = (int)std::max(1.f, ImGui::GetContentRegionAvail().x / (BTN_SIZE + sp));
     ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, { 0.5f, 0.5f });
+    //ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImGui::GetStyle().ItemSpacing);
     for (const auto& cat : tbButtons)
     {
         ImGui::SetNextItemOpen(true, ImGuiCond_Appearing);
@@ -2142,6 +2160,8 @@ void PopupUI()
     configurationDlg.Draw();
 
     newStyleDlg.Draw();
+
+    textEdit.Draw();
 }
 
 void Draw()

@@ -407,20 +407,30 @@ void RenderFilledWindowCorners(ImDrawFlags fl);
 
 #ifdef IMRAD_WITH_FMT
 
-//only support format_string version for compile time checks
 template <class... A>
 std::string Format(fmt::format_string<A...> fmt, A&&... args)
 {
     return fmt::format(fmt, std::forward<A>(args)...);
 }
 
+template <class... A>
+std::string VFormat(const char* fmt, A&&... args)
+{
+    return fmt::vformat(fmt, std::make_format_args(args...));
+}
+
 #elif CPLUSPLUS >= 202002L && __has_include(<format>)
 
-//only support format_string version for compile time checks
 template <class... A>
 std::string Format(std::format_string<A...> fmt, A&&... args)
 {
     return std::format(fmt, std::forward<A>(args)...);
+}
+
+template <class... A>
+std::string VFormat(const char* fmt, A&&... args)
+{
+    return std::vformat(fmt, std::make_format_args(args...));
 }
 
 #else
@@ -474,7 +484,21 @@ std::string Format(const char* fmt, A&&... args)
     return FormatFallback(fmt, fmt + strlen(fmt), std::forward<A>(args)...);
 }
 
+template <class... A>
+std::string VFormat(const char* fmt, A&&... args)
+{
+    return FormatFallback(fmt, fmt + strlen(fmt), std::forward<A>(args)...);
+}
+
 #endif
+
+const char* Translate(const char* text);
+
+const char* Translate(const char* context, const char* text);
+
+const char* Translate(const char* text, const char* plural, int n);
+
+const char* Translate(const char* context, const char* text, const char* plural, int n);
 
 } // namespace
 
@@ -497,6 +521,10 @@ std::string Format(const char* fmt, A&&... args)
 
 #ifdef IMRAD_WITH_MINIZIP
 #include <unzip.h>
+#endif
+
+#ifdef IMRAD_WITH_GETTEXT
+#include <libintl.h>
 #endif
 
 namespace ImRad
@@ -1721,6 +1749,42 @@ ImFont* GetFontByName(const char* name)
 ImFont* GetFontByName(const std::string& name)
 {
     return GetFontByName(name.c_str());
+}
+
+const char* Translate(const char* text)
+{
+#ifdef IMRAD_WITH_GETTEXT
+    return gettext(text);
+#else
+    return text;
+#endif
+}
+
+const char* Translate(const char* context, const char* text)
+{
+#ifdef IMRAD_WITH_GETTEXT
+    return pgettext(context, text);
+#else
+    return text;
+#endif
+}
+
+const char* Translate(const char* text, const char* plural, int n)
+{
+#ifdef IMRAD_WITH_GETTEXT
+    return ngettext(text, plural, n);
+#else
+    return n ? plural : text;
+#endif
+}
+
+const char* Translate(const char* context, const char* text, const char* plural, int n)
+{
+#ifdef IMRAD_WITH_GETTEXT
+    return npgettext(context, text, plural, n);
+#else
+    return n ? plural : text;
+#endif
 }
 
 } // namespace

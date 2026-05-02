@@ -40,6 +40,7 @@ struct UIContext
     ImTextureID dashTexId = 0;
     bool* modified = nullptr;
     std::vector<UINode*> allRoots;
+    bool showUntranslated = false;
 
     //snap result
     UINode* snapParent = nullptr;

@@ -15,7 +15,7 @@ struct property_base
 {
     virtual std::string to_arg(std::string_view a = "", std::string_view b = "") const = 0;
     virtual bool set_from_arg(std::string_view s) = 0;
-    virtual const char* c_str() const = 0;
+    virtual std::string display_string() const { return "xxx"; }
     virtual std::vector<std::string> used_variables() const = 0;
     virtual void rename_variable(const std::string& oldn, const std::string& newn) = 0;
 };
@@ -29,7 +29,10 @@ struct field_ref : property_base
     bool empty() const {
         return str.empty();
     }
-    const std::string& value() const {
+    /*const std::string& value() const {
+        return str;
+    }*/
+    std::string display_string() const {
         return str;
     }
     bool has_single_variable() const {
@@ -61,7 +64,6 @@ struct field_ref : property_base
         if (id == oldn)
             str.replace(id.data() - str.data(), id.size(), newn);
     }
-    const char* c_str() const { return str.c_str(); }
     std::string* access() { return &str; }
 private:
     std::string str;
@@ -74,12 +76,17 @@ struct event : property_base
     bool empty() const {
         return str.empty();
     }
+    std::string display_string() const {
+        return str;
+    }
     bool set_from_arg(std::string_view s) {
         str = s;
         return true;
     }
-    std::string to_arg(std::string_view = "", std::string_view = "") const {
-        return str;
+    std::string to_arg(std::string_view arg = "", std::string_view = "") const {
+        std::ostringstream os;
+        os << str << "(" << arg << ")";
+        return os.str();
     }
     std::vector<std::string> used_variables() const {
         if (empty())
@@ -91,7 +98,6 @@ struct event : property_base
         if (str == oldn)
             str = newn;
     }
-    const char* c_str() const { return str.c_str(); }
     std::string* access() { return &str; }
 private:
     std::string str;
@@ -143,7 +149,6 @@ struct direct_val<T, false> : property_base
     void rename_variable(const std::string& oldn, const std::string& newn)
     {}
     T* access() { return &val; }
-    const char* c_str() const { return nullptr; }
 
 private:
     T val;
@@ -251,7 +256,6 @@ struct direct_val<T, true> : property_base
     void rename_variable(const std::string& oldn, const std::string& newn)
     {}
     int* access() { return &val; }
-    const char* c_str() const { return nullptr; }
 
 private:
     int val;
@@ -307,7 +311,6 @@ struct direct_val<dimension_t> : property_base
     void rename_variable(const std::string& oldn, const std::string& newn)
     {}
     float* access() { return &val; }
-    const char* c_str() const { return nullptr; }
 
 private:
     float val;
@@ -365,7 +368,6 @@ struct direct_val<pzdimension_t> : property_base
     void rename_variable(const std::string& oldn, const std::string& newn)
     {}
     float* access() { return &val; }
-    const char* c_str() const { return nullptr; }
 
 private:
     float val;
@@ -441,7 +443,6 @@ struct direct_val<pzdimension2_t> : property_base
     void rename_variable(const std::string& oldn, const std::string& newn)
     {}
     ImVec2* access() { return &val; }
-    const char* c_str() const { return nullptr; }
 
 private:
     ImVec2 val;
@@ -455,11 +456,13 @@ struct direct_val<std::string> : property_base
 
     operator std::string&() { return val; }
     operator const std::string&() const { return val; }
-    //operator std::string_view() const { return val; }
-    const std::string& value() const { return val; }
+    //const std::string& value() const { return val; }
+    std::string display_string() const {
+        return val;
+    }
 
     bool set_from_arg(std::string_view s) {
-        val = cpp::parse_str_arg(s);
+        val = cpp::parse_str_arg(s).text;
         return val != cpp::INVALID_TEXT;
     }
     std::string to_arg(std::string_view = "", std::string_view = "") const {
@@ -471,7 +474,6 @@ struct direct_val<std::string> : property_base
     void rename_variable(const std::string& oldn, const std::string& newn)
     {}
     std::string* access() { return &val; }
-    const char* c_str() const { return val.c_str(); }
     bool empty() const { return val.empty(); }
     bool operator== (const std::string& dv) const {
         return val == dv;
@@ -491,7 +493,9 @@ struct direct_val<shortcut_t> : property_base
 
     int flags() const { return flags_; }
     void set_flags(int f) { flags_ = f; }
+    bool empty() const { return sh.empty(); }
     //const std::string& value() const { return val; }
+    std::string display_string() const { return sh; }
 
     bool set_from_arg(std::string_view s) {
         sh = ParseShortcut(s);
@@ -520,8 +524,6 @@ struct direct_val<shortcut_t> : property_base
     void rename_variable(const std::string& oldn, const std::string& newn)
     {}
     std::string* access() { return &sh; }
-    const char* c_str() const { return sh.c_str(); }
-    bool empty() const { return sh.empty(); }
 private:
     std::string sh;
     int flags_;
@@ -547,6 +549,7 @@ struct bindable : property_base
         return str != b.str;
     }
     bool empty() const { return str.empty(); }
+    std::string display_string() const { return str; }
     bool has_value() const {
         return cpp::is_literal(str);
     }
@@ -638,7 +641,6 @@ struct bindable : property_base
                 str.replace(id.data() - str.data(), id.size(), newn);
         }
     }
-    const char* c_str() const { return str.c_str(); }
     std::string* access() { return &str; }
 private:
     std::string str;
@@ -663,6 +665,9 @@ struct bindable<dimension_t> : property_base
     }
     bool empty() const {
         return str.empty();
+    }
+    std::string display_string() const {
+        return str;
     }
     bool zero() const {
         if (empty())
@@ -774,7 +779,6 @@ struct bindable<dimension_t> : property_base
                 str.replace(id.data() - str.data(), id.size(), newn);
         }
     }
-    const char* c_str() const { return str.c_str(); }
     std::string* access() { return &str; }
 
     void stretch(bool s) {
@@ -816,16 +820,58 @@ struct bindable<std::string> : property_base
     bool operator!= (const bindable& b) const {
         return str != b.str;
     }
-    bool empty() const { return str.empty(); }
-    const std::string& value() const { return str; }
+    bool empty() const {
+        return str.empty();
+    }
+    std::string display_string() const {
+        return has_tr() ? tr_singular() : str;
+    }
+    bool has_tr() const {
+        return str.find("@^translation@") != std::string::npos;
+    }
+    std::string tr_singular() const {
+        return get_token("translation");
+    }
+    std::string tr_context() const {
+        return get_token("context");
+    }
+    std::string tr_pvar() const {
+        return get_token("pvar");
+    }
+    std::string tr_plural() const {
+        return get_token("plural");
+    }
+    void set_tr(std::string_view ctx, std::string_view singular, std::string_view plural, std::string_view pvar) {
+        std::ostringstream os;
+        os << "@^context@" << ctx << "@^translation@" << singular <<  "@^pvar@" << pvar
+            << "@^plural@" << plural;
+        str = os.str();
+    }
+    std::string get_token(std::string_view key) const {
+        size_t i = str.find("@^" + key + "@");
+        if (i == std::string::npos)
+            return "";
+        i += 3 + key.size();
+        size_t j = str.find("@^", i);
+        if (j == std::string::npos)
+            j = str.size();
+        return str.substr(i, j - i);
+    }
     bool set_from_arg(std::string_view s)
     {
-        str = cpp::parse_str_arg(s);
+        auto r = cpp::parse_str_arg(s);
+        if (r.singular != "")
+            set_tr(r.context, r.singular, r.plural, r.pvar);
+        else
+            str = r.text;
         return str != cpp::INVALID_TEXT;
     }
     std::string to_arg(std::string_view = "", std::string_view = "") const
     {
-        return cpp::to_str_arg(str);
+        if (has_tr())
+            return cpp::to_tr_arg(tr_context(), tr_singular(), tr_plural(), tr_pvar());
+        else
+            return cpp::to_str_arg(str);
     }
     bool has_single_variable() const {
         if (empty() || str[0] != '{' || str.back() != '}')
@@ -893,7 +939,6 @@ struct bindable<std::string> : property_base
             }
         }
     }
-    const char* c_str() const { return str.c_str(); }
     std::string* access() { return &str; }
 protected:
     std::string str;
@@ -903,21 +948,29 @@ protected:
 template <>
 struct bindable<std::vector<std::string>> : bindable<std::string>
 {
-    bindable() {}
-    bool has_single_variable() const
+    bindable()
+    {}
+    /*bool has_single_variable() const
     {
         return str.size() > 2 && str[0] == '{' &&
             str.find('{', 1) == std::string::npos &&
             str.back() == '}';
-    }
+    }*/
     bool set_from_arg(std::string_view s)
     {
-        str = cpp::parse_str_arg(s, true);
+        auto r = cpp::parse_str_arg(s, true);
+        if (r.singular != "")
+            set_tr(r.context, r.singular, "", "");
+        else
+            str = r.text;
         return str != cpp::INVALID_TEXT;
     }
     std::string to_arg(std::string_view = "", std::string_view = "") const
     {
-        return cpp::to_str_arg(str, true);
+        if (has_tr())
+            return cpp::to_tr_arg(tr_context(), tr_singular(), "", "", true);
+        else
+            return cpp::to_str_arg(str, true);
     }
 };
 
@@ -943,6 +996,11 @@ struct bindable<font_name_t> : property_base
         if (!has_value())
             return "";
         return str.substr(22, str.size() - 22 - 2);
+    }
+    std::string display_string() const {
+        if (has_value())
+            return value();
+        return str;
     }
 
     ImFont* eval(UIContext& ctx) const;
@@ -986,7 +1044,6 @@ struct bindable<font_name_t> : property_base
                 str.replace(id.data() - str.data(), id.size(), newn);
         }
     }
-    const char* c_str() const { return str.c_str(); }
     std::string* access() { return &str; }
 private:
     std::string str;
@@ -1009,7 +1066,14 @@ struct bindable<color_t> : property_base
     bool operator!= (const bindable& b) const {
         return str != b.str;
     }
-    bool empty() const { return str.empty(); }
+    bool empty() const {
+        return str.empty();
+    }
+    std::string display_string() const {
+        if (has_style_color())
+            return ImGui::GetStyleColorName(style_color());
+        return str;
+    }
     /*bool has_value() const {
         if (empty())
             return false;
@@ -1078,7 +1142,6 @@ struct bindable<color_t> : property_base
                 str.replace(id.data() - str.data(), id.size(), newn);
         }
     }
-    const char* c_str() const { return str.c_str(); }
     std::string* access() { return &str; }
 private:
     std::string str;
@@ -1156,7 +1219,8 @@ struct data_loop : property_base
         limit.rename_variable(oldn, newn);
         index.rename_variable(oldn, newn);
     }
-    const char* c_str() const { return limit.c_str(); }
-    std::string* access() { return limit.access(); }
+    std::string* access() {
+        return limit.access();
+    }
 };
 

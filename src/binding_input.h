@@ -11,6 +11,7 @@
 #include "ui_new_field.h"
 #include "ui_binding.h"
 #include "ui_combo_dlg.h"
+#include "ui_text_edit.h"
 
 inline const char* PARENT_STR = "inherit";
 inline const uint32_t NONE_COLOR = 0xff800000;
@@ -70,7 +71,7 @@ inline bool BindingButton(const char* label, bindable<T>* val, const std::string
         bindingDlg.codeGen = ctx.codeGen;
         bindingDlg.curArray = ctx.GetCurrentArray();
         bindingDlg.name = label;
-        bindingDlg.expr = val->c_str();
+        bindingDlg.expr = *val->access();
         bindingDlg.type = type;
         bindingDlg.forceReference = flags & BindingButton_ReferenceOnly;
         bindingDlg.OpenPopup([&ctx, val](ImRad::ModalResult) {
@@ -280,7 +281,7 @@ inline bool InputDirectValContextMenu(direct_val<std::string>* val, UIContext& c
     bool changed = false;
     ImGui::PushFont(!ImRad::IsCurrentItemDisabled() ? ctx.pgbFont : ctx.pgFont);
     std::string id = "##" + std::to_string((uint64_t)val);
-    if (ImGui::BeginCombo(id.c_str(), val->c_str(),
+    if (ImGui::BeginCombo(id.c_str(), val->display_string().c_str(),
         IsHighlighted(id) ? 0 : ImGuiComboFlags_NoArrowButton))
     {
         ImGui::PopFont();
@@ -291,9 +292,10 @@ inline bool InputDirectValContextMenu(direct_val<std::string>* val, UIContext& c
             changed = true;
             *val->access() = "";
         }
+        std::string currVal = *val;
         for (const std::string& cm : ctx.contextMenus)
         {
-            if (ImGui::Selectable(cm.c_str(), cm == val->c_str()))
+            if (ImGui::Selectable(cm.c_str(), cm == currVal))
             {
                 changed = true;
                 *val->access() = cm;
@@ -478,16 +480,16 @@ inline bool InputBindable(bindable<T>* val, const std::string& type, int flags, 
         changed = ImGui::InputTextWithHint(id.c_str(), hint.c_str(), val->access(), fl, DefaultCharFilter);
         ImGui::PopFont();
 
-        if (ImGui::CalcTextSize(val->c_str()).x > ImGui::GetItemRectSize().x)
+        if (ImGui::CalcTextSize(val->access()->c_str()).x > ImGui::GetItemRectSize().x)
         {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 8, 8 });
-            ImGui::SetItemTooltip("%s", val->c_str());
+            ImGui::SetItemTooltip("%s", val->access()->c_str());
             ImGui::PopStyleVar();
         }
         if (ImGui::IsItemDeactivatedAfterEdit())
         {
             //disallow empty state
-            std::string v = Trim(val->c_str());
+            std::string v = Trim(val->access()->c_str());
             if (v.empty())
                 *val = {};
             else
@@ -498,7 +500,7 @@ inline bool InputBindable(bindable<T>* val, const std::string& type, int flags, 
     {
         ImGui::PushFont(!ImRad::IsCurrentItemDisabled() && (flags & InputBindable_Modified) ?
             ctx.pgbFont : ctx.pgFont);
-        if (ImGui::BeginCombo(id.c_str(), val->c_str(),
+        if (ImGui::BeginCombo(id.c_str(), val->display_string().c_str(),
             !ImRad::IsCurrentItemDisabled() && IsHighlighted(id) ? 0 : ImGuiComboFlags_NoArrowButton))
         {
             ImGui::PopFont();
@@ -545,7 +547,7 @@ inline bool InputBindable(bindable<T>* val, const std::string& type, int flags, 
             float sp = ImGui::CalcTextSize(" ").x;*/
             for (const auto& v : vars)
             {
-                if (ImGui::Selectable(v.first.c_str(), v.first == val->c_str()))
+                if (ImGui::Selectable(v.first.c_str(), v.first == *val->access()))
                 {
                     *val->access() = v.first;
                     changed = true;
@@ -573,8 +575,7 @@ template <class T,
 
 inline bool InputBindable(bindable<font_name_t>* val, UIContext& ctx)
 {
-    std::string fn = val->empty() ? PARENT_STR :
-        val->has_value() ? val->value() : val->c_str();
+    std::string fn = val->empty() ? PARENT_STR : val->display_string();
     bool changed = false;
     std::string id = "##" + std::to_string((uint64_t)val);
     if (ImGui::BeginCombo(id.c_str(), nullptr,
@@ -623,8 +624,8 @@ inline bool InputBindable(bindable<color_t>* val, int defStyleCol, UIContext& ct
     ImGui::PushStyleColor(ImGuiCol_FrameBg, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
     if (ImGui::ColorButton(id.c_str(), buttonClr, ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_AlphaPreview))
     {
-        lastColor = val->c_str();
-        lastStyleClr = styleClr;
+        lastColor = *val->access();
+        lastStyleClr = val->style_color();
         ImGui::OpenPopup(id.c_str());
     }
     ImGui::PopStyleColor();
@@ -637,17 +638,15 @@ inline bool InputBindable(bindable<color_t>* val, int defStyleCol, UIContext& ct
         if (sz.x < 0)
             sz.x += ImGui::GetContentRegionAvail().x;
     }
-    std::string clrName = styleClr >= 0 ? ImGui::GetStyleColorName(styleClr) :
-        val->empty() ? PARENT_STR :
-        val->c_str();
+    std::string clrName = val->empty() ? PARENT_STR : val->display_string();
     clrName += id;
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(val->empty() ? ImGuiCol_TextDisabled : ImGuiCol_Text));
     ImGui::PushFont(!ImRad::IsCurrentItemDisabled() && !val->empty() ?
         ctx.pgbFont : ctx.pgFont);
     if (ImGui::Selectable(clrName.c_str(), false, 0, sz))
     {
-        lastColor = val->c_str();
-        lastStyleClr = styleClr;
+        lastColor = *val->access();
+        lastStyleClr = val->style_color();
         ImGui::OpenPopup(id.c_str());
     }
     ImGui::PopFont();
@@ -829,7 +828,7 @@ inline bool InputBindable(bindable<std::string>* val, int flags, UIContext& ctx,
     std::string id = "##" + std::to_string((uint64_t)val);
     std::string butId = ICON_FA_ELLIPSIS + id;
     bool high = IsHighlighted(id) || IsHighlighted(butId);
-    bool hasButton = flags & (InputBindable_MultilineEdit | InputBindable_CustomButton);
+    bool hasButton = true; // flags& (InputBindable_MultilineEdit | InputBindable_CustomButton);
     float w = ImGui::CalcItemWidth();
     if (hasButton && high)
         w -= ImGui::GetFrameHeight();
@@ -840,16 +839,41 @@ inline bool InputBindable(bindable<std::string>* val, int flags, UIContext& ctx,
         !ImRad::IsCurrentItemDisabled() ? ctx.pgbFont :
         ctx.pgFont
     );
-    bool changed = ImGui::InputText(id.c_str(), val->access(), ImGuiInputTextFlags_CallbackCharFilter, DefaultCharFilter);
+    bool hasTr = val->has_tr();
+    bool hasPlural = val->has_tr() && val->tr_plural() != "";
+    bool isMultiline = val->access()->find('\n') != std::string::npos;
+    bool changed = false;
+    if (hasTr) {
+        int fl = ImGuiInputTextFlags_CallbackCharFilter;
+        if (hasPlural || isMultiline) {
+            fl |= ImGuiInputTextFlags_ReadOnly;
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(high ? ImGuiCol_TextDisabled : ImGuiCol_Text));
+        }
+        else {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_Text));
+        }
+        std::string valStr = val->tr_singular();
+        changed = ImGui::InputText(id.c_str(), &valStr, fl, DefaultCharFilter);
+        if (changed)
+            val->set_tr(val->tr_context(), valStr, val->tr_plural(), val->tr_pvar());
+        ImGui::PopStyleColor();
+    }
+    else if (isMultiline) {
+        int fl = ImGuiInputTextFlags_CallbackCharFilter | ImGuiInputTextFlags_ReadOnly;
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(high ? ImGuiCol_TextDisabled : ImGuiCol_Text));
+        changed = ImGui::InputText(id.c_str(), val->access(), fl, DefaultCharFilter);
+        ImGui::PopStyleColor();
+    }
+    else {
+        changed = ImGui::InputText(id.c_str(), val->access(), ImGuiInputTextFlags_CallbackCharFilter, DefaultCharFilter);
+    }
     ImGui::PopFont();
 
     if (hasButton && high)
     {
         ImGui::SameLine(0, 0);
         ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
-        bool isDown = false;
-        if (flags & InputBindable_MultilineEdit)
-            isDown = val->access()->find('\n') != std::string::npos;
+        bool isDown = isMultiline || hasTr;
         ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(
             isDown ? ImGuiCol_ButtonActive : ImGuiCol_Button
             ));
@@ -859,14 +883,25 @@ inline bool InputBindable(bindable<std::string>* val, int flags, UIContext& ctx,
             {
                 fun();
             }
-            else if (flags & InputBindable_MultilineEdit)
+            else
             {
-                comboDlg.title = "Multiline text";
-                comboDlg.value = *val->access();
-                comboDlg.font = ctx.defaultStyleFont;
-                comboDlg.OpenPopup([&ctx, val](ImRad::ModalResult mr) {
+                textEdit.showPlural = true;
+                textEdit.activeTab = hasTr ? 1 : 0;
+                textEdit.font = ctx.defaultStyleFont;
+                textEdit.text = hasTr ? "" : *val->access();
+                textEdit.context = val->tr_context();
+                textEdit.singular = val->tr_singular();
+                textEdit.pluralVariable = val->tr_pvar();
+                textEdit.plural = val->tr_plural();
+                textEdit.OpenPopup([&ctx, val](ImRad::ModalResult mr) {
                     ctx.setProp = val;
-                    ctx.setPropValue = comboDlg.value;
+                    if (!textEdit.activeTab)
+                        ctx.setPropValue = textEdit.text;
+                    else {
+                        bindable<std::string> tmp;
+                        tmp.set_tr(textEdit.context, textEdit.singular, textEdit.plural, textEdit.pluralVariable);
+                        ctx.setPropValue = *tmp.access();
+                    }
                     });
             }
         }
@@ -924,6 +959,27 @@ inline bool InputBindable(bindable<std::vector<std::string>>* val, UIContext& ct
             stx::replace(tmp, '\0', '\n');
             if (tmp.size() && tmp.back() == '\n')
                 tmp.pop_back();
+
+            /*todo
+            textEdit.showPlural = false;
+            textEdit.activeTab = hasTr ? 1 : 0;
+            textEdit.font = ctx.defaultStyleFont;
+            textEdit.text = hasTr ? "" : *val->access();
+            textEdit.context = val->tr_context();
+            textEdit.singular = val->tr_singular();
+            textEdit.plural = "";
+            textEdit.pluralVariable = "";
+            textEdit.OpenPopup([&ctx, val](ImRad::ModalResult mr) {
+                ctx.setProp = val;
+                if (!textEdit.activeTab)
+                    ctx.setPropValue = textEdit.text;
+                else {
+                    bindable<std::string> tmp;
+                    tmp.set_tr(textEdit.context, textEdit.singular, textEdit.plural, textEdit.pluralVariable);
+                    ctx.setPropValue = *tmp.access();
+                }
+                });
+                */
             comboDlg.title = "Items";
             comboDlg.value = tmp;
             comboDlg.font = ctx.defaultStyleFont;
@@ -961,9 +1017,10 @@ inline bool InputBindable(bindable<std::vector<std::string>>* val, UIContext& ct
 
         ImGui::Separator();
         const auto& vars = ctx.codeGen->GetVarExprs("std::vector<std::string>", true, ctx.GetCurrentArray());
+        std::string usedVar = val->has_single_variable() ? val->used_variables()[0] : "";
         for (const auto& v : vars)
         {
-            if (ImGui::Selectable(v.first.c_str(), '{' + v.first + '}' == val->c_str()))
+            if (ImGui::Selectable(v.first.c_str(), v.first == usedVar))
             {
                 *val->access() = '{' + v.first + '}';
                 changed = true;
@@ -1074,7 +1131,7 @@ inline bool InputFieldRef(field_ref<T>* val, const std::string& type, bool allow
     bool changed = false;
     std::string id = "##" + std::to_string((uint64_t)val);
     ImGui::PushFont(ctx.pgbFont);
-    if (ImGui::BeginCombo(id.c_str(), val->c_str(),
+    if (ImGui::BeginCombo(id.c_str(), val->display_string().c_str(),
         !ImRad::IsCurrentItemDisabled() && IsHighlighted(id) ? 0 : ImGuiComboFlags_NoArrowButton))
     {
         ImGui::PopFont();
@@ -1120,7 +1177,7 @@ inline bool InputFieldRef(field_ref<T>* val, const std::string& type, bool allow
         auto vars = ctx.codeGen->GetVarExprs(type, true, ctx.GetCurrentArray());
         for (const auto& v : vars)
         {
-            if (ImGui::Selectable(v.first.c_str(), v.first == val->c_str()))
+            if (ImGui::Selectable(v.first.c_str(), v.first == *val->access()))
             {
                 *val->access() = v.first;
                 changed = true;
@@ -1158,7 +1215,7 @@ inline bool InputDataSize(bindable<int>* val, bool allowEmpty, UIContext& ctx)
     std::string id = "##" + std::to_string((uint64_t)val);
     ImGui::PushFont(ctx.pgbFont);
 
-    if (ImGui::BeginCombo(id.c_str(), val->c_str(),
+    if (ImGui::BeginCombo(id.c_str(), val->display_string().c_str(),
             IsHighlighted(id) ? 0 : ImGuiComboFlags_NoArrowButton))
     {
         ImGui::PopFont();
@@ -1194,7 +1251,7 @@ inline bool InputDataSize(bindable<int>* val, bool allowEmpty, UIContext& ctx)
         const auto& vars = ctx.codeGen->GetVarExprs("int", false);
         for (const auto& v : vars)
         {
-            if (ImGui::Selectable(v.first.c_str(), v.first == val->c_str()))
+            if (ImGui::Selectable(v.first.c_str(), v.first == val->display_string()))
             {
                 *val->access() = v.first;
                 changed = true;
@@ -1247,7 +1304,7 @@ inline bool InputEvent(const std::string& name, event<FuncSig>* val, int flags, 
     if (buttonVisible)
     {
         ImGui::SetNextWindowSizeConstraints({ realWidth + ImGui::GetFrameHeight(), 0 }, { FLT_MAX, FLT_MAX });
-        if (ImGui::BeginCombo(id.c_str(), val->c_str(), ImGuiComboFlags_HeightLarge | ImGuiComboFlags_NoPreview))
+        if (ImGui::BeginCombo(id.c_str(), val->display_string().c_str(), ImGuiComboFlags_HeightLarge | ImGuiComboFlags_NoPreview))
         {
             ImGui::PushStyleColor(ImGuiCol_Text, NONE_COLOR);
             if (ImGui::Selectable("None"))
@@ -1278,9 +1335,10 @@ inline bool InputEvent(const std::string& name, event<FuncSig>* val, int flags, 
                     events.push_back(v.name);
             }
             stx::sort(events);
+            std::string currVal = val->display_string();
             for (const auto& ev : events)
             {
-                if (ImGui::Selectable(ev.c_str(), ev == val->c_str()))
+                if (ImGui::Selectable(ev.c_str(), ev == currVal))
                 {
                     changed = true;
                     *val->access() = ev;

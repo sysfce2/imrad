@@ -1,10 +1,11 @@
 // Generated with ImRAD 0.10-WIP
-// github.com/tpecholt/imrad
+// visit https://github.com/tpecholt/imrad
 
 #pragma once
-#include "imrad.h"
+#include <imrad.h>
+#include "node_standard.h"
 
-class ComboDlg
+class TextEdit
 {
 public:
     /// @begin interface
@@ -12,11 +13,14 @@ public:
     void ClosePopup(ImRad::ModalResult mr = ImRad::Cancel);
     void Draw();
 
-    std::string title = "Items";
-    std::string value;
+    std::string singular;
+    std::string pluralVariable;
+    std::string context;
+    std::string text;
+    std::string plural;
+    int activeTab = 0;
+    bool showPlural = true;
     ImFont* font = nullptr;
-    bool requestOpen = false;
-    bool requestClose = false;
     /// @end interface
 
 private:
@@ -25,12 +29,19 @@ private:
     void ResetLayout();
     void Init();
 
+    void OkButton_Change();
+
     ImGuiID ID = 0;
     ImRad::ModalResult modalResult;
     std::function<void(ImRad::ModalResult)> callback;
+    bool focusInput = false;
     ImRad::VBox vb1;
-    ImRad::HBox hb2;
+    ImRad::HBox hb11;
     /// @end impl
+    int tmp = 5;
+
+    bool OkDisabled();
+    void DrawMultilineTextArgs(PreparedString& ps);
 };
 
-extern ComboDlg comboDlg;
+extern TextEdit textEdit;

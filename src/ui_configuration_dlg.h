@@ -44,15 +44,14 @@ private:
     ImRad::ModalResult modalResult;
     std::function<void(ImRad::ModalResult)> callback;
     int selRow = 0;
-    std::string error;
     int curRow = 0;
     bool focusName = false;
     ImRad::VBox vb1;
     ImRad::HBox hb3;
-    ImRad::HBox hb4;
     /// @end impl
 
-    void Check();
+    bool CheckName(int i);
+    bool Check();
 };
 
 extern ConfigurationDlg configurationDlg;

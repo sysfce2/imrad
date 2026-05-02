@@ -54,6 +54,7 @@ struct TopWindow : UINode
     int Behavior() { return SnapInterior | SizerOwner; }
     int ColumnCount(UIContext& ctx) { return 0; }
     std::string GetTypeName() { return "Window"; }
+    bool IsTranslated();
     const TopWindow& Defaults() { static TopWindow node(UIContext::Defaults()); return node; }
 };
 

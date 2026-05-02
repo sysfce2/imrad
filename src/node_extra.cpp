@@ -295,7 +295,7 @@ void DockNode::CalcHash(uint32_t& hash)
     HashCombineData(hash, (ImGuiDir)splitDir);
     HashCombineData(hash, splitRatio.value());
     HashCombineData(hash, (int)flags);
-    HashCombineData(hash, labels.value().size());
+    HashCombineData(hash, labels.display_string().size());
 
     for (const auto& child : children) {
         auto* node = dynamic_cast<DockNode*>(child.get());
@@ -310,7 +310,7 @@ ImDrawList* DockNode::DoDraw(UIContext& ctx)
 
     if (children.empty())
     {
-        ImVec2 tsize = ImGui::CalcTextSize(labels.c_str());
+        ImVec2 tsize = ImGui::CalcTextSize(labels.display_string().c_str());
         std::istringstream is(labels=="" ? " " : labels);
         std::string label;
         while (std::getline(is, label))
@@ -327,7 +327,7 @@ ImDrawList* DockNode::DoDraw(UIContext& ctx)
                         cached_pos.x + (cached_size.x - tsize.x) / 2,
                         cached_pos.y + (cached_size.y - tsize.y) / 2
                         });
-                    ImGui::TextDisabled("%s", labels.c_str());
+                    ImGui::TextDisabled("%s", labels.display_string().c_str());
                 }
 
                 if (ctx.mode == UIContext::NormalSelection &&

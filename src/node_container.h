@@ -5,7 +5,7 @@ struct Table : Widget
 {
     struct ColumnData
     {
-        direct_val<std::string> label = "";
+        bindable<std::string> label = "";
         bindable<bool> visible;
         direct_val<ImGuiTableColumnFlags_> sizingPolicy = 0;
         direct_val<float> width = 0;
@@ -48,7 +48,8 @@ struct Table : Widget
     bool EventUI(int i, UIContext& ctx);
     void DoExport(std::ostream& os, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
-    const char* GetIcon() const { return ICON_FA_TABLE_CELLS_LARGE; }
+    bool IsTranslated();
+    const char* GetIcon() { return ICON_FA_TABLE_CELLS_LARGE; }
     const Table& Defaults() { static Table var(UIContext::Defaults()); return var; }
     int ColumnCount(UIContext& ctx) { return (int)columnData.size(); }
 };
@@ -75,8 +76,9 @@ struct Child : Widget
     bool PropertyUI(int i, UIContext& ctx);
     void DoExport(std::ostream& os, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
-    const char* GetIcon() const { return ICON_FA_SQUARE_FULL; }
+    const char* GetIcon() { return ICON_FA_SQUARE_FULL; }
     void CalcSizeEx(ImVec2 p1, UIContext& ctx);
+    bool IsTranslated() { return true; }
     const Child& Defaults() { static Child var(UIContext::Defaults()); return var; }
     int ColumnCount(UIContext& ctx) { return columnCount.eval(ctx); }
 };
@@ -99,7 +101,8 @@ struct CollapsingHeader : Widget
     void DoExport(std::ostream& os, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
     void CalcSizeEx(ImVec2 p1, UIContext& ctx);
-    const char* GetIcon() const { return ICON_FA_ARROW_DOWN_WIDE_SHORT; }
+    bool IsTranslated() { return label.has_tr() || label.has_single_variable(); }
+    const char* GetIcon() { return ICON_FA_ARROW_DOWN_WIDE_SHORT; }
     const CollapsingHeader& Defaults() { static CollapsingHeader var(UIContext::Defaults()); return var; }
 };
 
@@ -124,7 +127,8 @@ struct TabBar : Widget
     void DoExport(std::ostream& os, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
     void CalcSizeEx(ImVec2 p1, UIContext& ctx);
-    const char* GetIcon() const { return ICON_FA_FOLDER_CLOSED; }
+    bool IsTranslated() { return true; }
+    const char* GetIcon() { return ICON_FA_FOLDER_CLOSED; }
     const TabBar& Defaults() { static TabBar var(UIContext::Defaults()); return var; }
 };
 
@@ -146,7 +150,8 @@ struct TabItem : Widget
     void DoExport(std::ostream& os, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
     void CalcSizeEx(ImVec2 p1, UIContext& ctx);
-    const char* GetIcon() const { return ICON_FA_FOLDER; }
+    bool IsTranslated() { return label.has_tr() || label.has_single_variable(); }
+    const char* GetIcon() { return ICON_FA_FOLDER; }
     const TabItem& Defaults() { static TabItem var(UIContext::Defaults()); return var; }
 };
 
@@ -166,7 +171,8 @@ struct TreeNode : Widget
     void DoExport(std::ostream& os, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
     void CalcSizeEx(ImVec2 p1, UIContext& ctx);
-    const char* GetIcon() const { return ICON_FA_SITEMAP; }
+    bool IsTranslated() { return label.has_tr() || label.has_single_variable(); }
+    const char* GetIcon() { return ICON_FA_SITEMAP; }
     const TreeNode& Defaults() { static TreeNode var(UIContext::Defaults()); return var; }
 };
 
@@ -183,7 +189,8 @@ struct MenuBar : Widget
     void DoExport(std::ostream& os, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
     void CalcSizeEx(ImVec2 p1, UIContext& ctx);
-    const char* GetIcon() const { return ICON_FA_ELLIPSIS; }
+    bool IsTranslated() { return true; }
+    const char* GetIcon() { return ICON_FA_ELLIPSIS; }
     const MenuBar& Defaults() { static MenuBar var(UIContext::Defaults()); return var; }
 };
 
@@ -206,14 +213,15 @@ struct ContextMenu : Widget
     void ExportAllShortcuts(std::ostream& os, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
     void CalcSizeEx(ImVec2 p1, UIContext& ctx);
-    const char* GetIcon() const { return ICON_FA_MESSAGE; }
+    bool IsTranslated() { return true; }
+    const char* GetIcon() { return ICON_FA_MESSAGE; }
     const ContextMenu& Defaults() { static ContextMenu var(UIContext::Defaults()); return var; }
 };
 
 struct MenuIt : Widget
 {
     direct_val<bool> ownerDraw = false;
-    direct_val<std::string> label = "Item";
+    bindable<std::string> label = "Item";
     direct_val<std::string> icon = "";
     direct_val<shortcut_t> shortcut = "";
     direct_val<bool> separator = false;
@@ -234,7 +242,8 @@ struct MenuIt : Widget
     void ExportAllShortcuts(std::ostream& os, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
     void CalcSizeEx(ImVec2 p1, UIContext& ctx);
-    const char* GetIcon() const { return ICON_FA_BARS; }
+    bool IsTranslated() { return label.empty(); }
+    const char* GetIcon() { return ICON_FA_BARS; }
     const MenuIt& Defaults() { static MenuIt var(UIContext::Defaults()); return var; }
 };
 
@@ -255,6 +264,7 @@ struct Splitter : Widget
     void DoExport(std::ostream& os, UIContext& ctx);
     void DoImport(const cpp::stmt_iterator& sit, UIContext& ctx);
     //void CalcSizeEx(ImVec2 p1, UIContext& ctx);
-    const char* GetIcon() const { return ICON_FA_TABLE_COLUMNS; }
+    bool IsTranslated() { return true; }
+    const char* GetIcon() { return ICON_FA_TABLE_COLUMNS; }
     const Splitter& Defaults() { static Splitter var(UIContext::Defaults()); return var; }
 };

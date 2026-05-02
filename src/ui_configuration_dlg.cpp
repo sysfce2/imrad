@@ -65,7 +65,7 @@ void ConfigurationDlg::Draw()
         vb1.BeginLayout();
         ImRad::Spacing(1);
         ImGui::TextUnformatted("Existing configurations:");
-        vb1.AddSize(1 * ImGui::GetStyle().ItemSpacing.y, ImRad::VBox::ItemSize);
+        vb1.AddSize(1 * ImGui::GetStyle().ItemSpacing.y, ImRad::VBox::TextSize);
         /// @end Text
 
         /// @begin Table
@@ -104,11 +104,13 @@ void ConfigurationDlg::Draw()
 
                 /// @begin Input
                 ImRad::TableNextColumn(1);
+                ImGui::PushStyleColor(ImGuiCol_Text, CheckName(curRow)?ImGui::GetStyleColorVec4(ImGuiCol_Text):ImVec4(1,0,0,1));
                 ImGui::SetNextItemWidth(-1);
-                if (ImGui::InputTextWithHint("##_item.name", DEFAULT_CFG_NAME.c_str(), &_item.name, 0))
+                if (ImGui::InputTextWithHint("##_item.name", ImRad::Format("{}", DEFAULT_CFG_NAME).c_str(), &_item.name, 0))
                     Name_Change();
                 if (ImGui::IsItemActive())
                     ImRad::GetUserData().imeType = ImRad::ImeText;
+                ImGui::PopStyleColor();
                 if (focusName)
                 {
                     //forceFocus
@@ -123,7 +125,7 @@ void ConfigurationDlg::Draw()
                 /// @begin Combo
                 ImRad::TableNextColumn(1);
                 ImGui::SetNextItemWidth(-1);
-                if (ImGui::BeginCombo("##_item.style", _item.style.c_str(), 0))
+                if (ImGui::BeginCombo("##2144880314336", _item.style.c_str(), 0))
                 {
                     StyleCombo_DrawItems();
                     ImGui::EndCombo();
@@ -135,7 +137,7 @@ void ConfigurationDlg::Draw()
                 /// @begin Combo
                 ImRad::TableNextColumn(1);
                 ImGui::SetNextItemWidth(-1);
-                ImRad::Combo("##_item.unit", &_item.unit, "px\000dp\000", 0);
+                ImRad::Combo("##2144880382368", &_item.unit, "px\000dp\000", 0);
                 if (ImGui::IsItemActivated())
                     Input_Activated();
                 /// @end Combo
@@ -146,7 +148,7 @@ void ConfigurationDlg::Draw()
             ImGui::EndTable();
         }
         ImGui::PopStyleVar();
-        vb1.AddSize(1 * ImGui::GetStyle().ItemSpacing.y, ImRad::VBox::Stretch(1.0f));
+        vb1.AddSize(1 * ImGui::GetStyle().ItemSpacing.y, ImRad::VBox::Stretch(1));
         ImGui::PopItemFlag();
         if (ImGui::IsWindowAppearing())
             ImGui::SetKeyboardFocusHere(-1);
@@ -194,34 +196,18 @@ void ConfigurationDlg::Draw()
         ImGui::SameLine(0, 1 * ImGui::GetStyle().ItemSpacing.x);
         ImRad::Dummy({ hb3.GetSize(), 20*dp });
         vb1.UpdateSize(0, 20*dp);
-        hb3.AddSize(1 * ImGui::GetStyle().ItemSpacing.x, ImRad::HBox::Stretch(1.0f));
-        /// @end Spacer
-
-        /// @begin Text
-        ImGui::SameLine(0, 1 * ImGui::GetStyle().ItemSpacing.x);
-        ImGui::PushStyleColor(ImGuiCol_Text, 0xff0000ff);
-        ImGui::TextUnformatted(error.c_str());
-        vb1.UpdateSize(0, ImRad::VBox::ItemSize);
-        hb3.AddSize(1 * ImGui::GetStyle().ItemSpacing.x, ImRad::HBox::ItemSize);
-        ImGui::PopStyleColor();
-        /// @end Text
-
-        /// @begin Spacer
-        hb4.BeginLayout();
-        ImRad::Dummy({ hb4.GetSize(), 20*dp });
-        vb1.AddSize(1 * ImGui::GetStyle().ItemSpacing.y, 20*dp);
-        hb4.AddSize(0 * ImGui::GetStyle().ItemSpacing.x, ImRad::HBox::Stretch(1.0f));
+        hb3.AddSize(1 * ImGui::GetStyle().ItemSpacing.x, ImRad::HBox::Stretch(1));
         /// @end Spacer
 
         /// @begin Button
         ImGui::SameLine(0, 1 * ImGui::GetStyle().ItemSpacing.x);
-        ImGui::BeginDisabled(error!="");
+        ImGui::BeginDisabled(!Check());
         if (ImGui::Button("OK", { 80*dp, 25*dp }))
         {
             ClosePopup(ImRad::Ok);
         }
         vb1.UpdateSize(0, 25*dp);
-        hb4.AddSize(1 * ImGui::GetStyle().ItemSpacing.x, 80*dp);
+        hb3.AddSize(1 * ImGui::GetStyle().ItemSpacing.x, 80*dp);
         ImGui::EndDisabled();
         /// @end Button
 
@@ -233,7 +219,7 @@ void ConfigurationDlg::Draw()
             ClosePopup(ImRad::Cancel);
         }
         vb1.UpdateSize(0, 25*dp);
-        hb4.AddSize(1 * ImGui::GetStyle().ItemSpacing.x, 80*dp);
+        hb3.AddSize(1 * ImGui::GetStyle().ItemSpacing.x, 80*dp);
         /// @end Button
 
         /// @separator
@@ -255,7 +241,6 @@ void ConfigurationDlg::ResetLayout()
     // ImGui::GetCurrentWindow()->HiddenFramesCannotSkipItems = 2;
     vb1.Reset();
     hb3.Reset();
-    hb4.Reset();
 }
 
 void ConfigurationDlg::AddButton_Change()
@@ -292,25 +277,27 @@ void ConfigurationDlg::Name_Change()
     Check();
 }
 
-void ConfigurationDlg::Check()
+bool ConfigurationDlg::CheckName(int i)
 {
-    error = "";
     std::vector<std::string> names;
-    for (const auto& cfg : configs)
-    {
-        bool invalid = stx::count_if(cfg.name, [](char c) {
-            return !std::isalnum(c) && c != '_';
-            });
-        if (invalid)
-            error = "\"" + cfg.name + "\" is not a valid id";
+    const auto& cfg = configs[i];
+    if (cfg.name != "" && !cpp::is_id(cfg.name))
+        return false;
 
-        size_t i = &cfg - configs.data();
-        if (std::count_if(configs.begin() + i + 1, configs.end(),
-            [&](const auto& c) { return c.name == cfg.name; }))
-        {
-            error = "Duplicated name '" + cfg.name + "' used";
-        }
-    }
+    if (std::count_if(configs.begin(), configs.begin() + i, [&](const auto& c) {
+        return c.name == cfg.name;
+        }))
+        return false;
+
+    return true;
+}
+
+bool ConfigurationDlg::Check()
+{
+    for (size_t i = 0; i < configs.size(); ++i)
+        if (!CheckName((int)i))
+            return false;
+    return true;
 }
 
 void ConfigurationDlg::Input_Activated()

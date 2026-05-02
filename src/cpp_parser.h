@@ -863,83 +863,173 @@ namespace cpp
         return tmp;
     }
 
-    inline std::string parse_str_arg(std::string_view str, bool directVar = false)
+    inline std::string unformat_str_arg(std::string_view format, token_iterator it)
     {
+        auto find_curly = [](std::string_view s, size_t i) {
+            --i;
+            while (true) {
+                i = s.find('{', i + 1);
+                if (i != std::string::npos &&
+                    i + 1 < s.size() && s[i + 1] == '{')
+                    ++i;
+                else
+                    return i;
+            }
+            return std::string::npos;
+            };
+        std::string expr, str;
+        size_t i = 0;
+        int level = 0;
+        while (true) {
+            std::string tok = *it;
+            if ((!level && tok == ",") || it == token_iterator()) {
+                if (expr != "") {
+                    size_t i2 = find_curly(format, i);
+                    if (i2 == std::string::npos)
+                        return str;
+                    str += unescape(format.substr(i, i2 - i));
+                    str += "{" + expr;
+                    i = i2;
+                    i2 = format.find("}", i);
+                    if (i2 == std::string::npos)
+                        return str;
+                    str += format.substr(i + 1, i2 - i); //copy formating code
+                    i = i2 + 1;
+                    expr = "";
+                }
+            }
+            else {
+                if (tok == "(" || tok == "[") {
+                    expr += tok;
+                    ++level;
+                }
+                else if (tok == ")" || tok == "]") {
+                    expr += tok;
+                    --level;
+                }
+                else if (cpp::is_cstr(tok))
+                    expr += unescape(tok);
+                else
+                    expr += tok;
+            }
+            if (it == token_iterator())
+                break;
+            ++it;
+        }
+        str += unescape(format.substr(i));
+        return str;
+    }
+
+    struct parsed_str
+    {
+        std::string text;
+        std::string context;
+        std::string singular;
+        std::string plural;
+        std::string pvar;
+    };
+    inline parsed_str parse_str_arg(std::string_view str, bool directVar = false)
+    {
+        parsed_str r;
+        parsed_str error;
+        error.text = INVALID_TEXT;
+
         if (str == "0" || str == "NULL" || str == "nullptr")
         {
-            return "";
+            return r;
         }
         else if (is_cstr(str))
         {
-            return unescape(str.substr(1, str.size() - 2), true);
+            r.text = unescape(str.substr(1, str.size() - 2), true);
+            return r;
         }
-        else if (!str.compare(0, 15, "ImRad::Format(\"") &&
+        else if (!str.compare(0, 14, "ImRad::Format(") &&
             !str.compare(str.size() - 9, 9, ").c_str()"))
         {
-            auto find_curly = [](std::string_view s, size_t i) {
-                --i;
-                while (true) {
-                    i = s.find('{', i + 1);
-                    if (i != std::string::npos &&
-                        i + 1 < s.size() && s[i + 1] == '{')
-                        ++i;
-                    else
-                        return i;
-                }
-                return std::string::npos;
-            };
-            std::istringstream is((std::string)str.substr(15 - 1, str.size() - 9 - 15 + 1));
+            std::istringstream is((std::string)str.substr(14, str.size() - 14 - 9));
             token_iterator it(is);
             std::string format = *it++;
+            if (!is_cstr(format))
+                return error;
             format = format.substr(1, format.size() - 2);
-            std::string expr, str;
-            size_t i = 0;
-            int level = 0;
-            while (true) {
-                std::string tok = *it;
-                if ((!level && tok == ",") || it == token_iterator()) {
-                    if (expr != "") {
-                        size_t i2 = find_curly(format, i);
-                        if (i2 == std::string::npos)
-                            return str;
-                        str += unescape(format.substr(i, i2 - i));
-                        str += "{" + expr;
-                        i = i2;
-                        i2 = format.find("}", i);
-                        if (i2 == std::string::npos)
-                            return str;
-                        str += format.substr(i + 1, i2 - i); //copy formating code
-                        i = i2 + 1;
-                        expr = "";
-                    }
-                }
-                else {
-                    if (tok == "(" || tok == "[") {
-                        expr += tok;
-                        ++level;
-                    }
-                    else if (tok == ")" || tok == "]") {
-                        expr += tok;
-                        --level;
-                    }
-                    else if (cpp::is_cstr(tok))
-                        expr += unescape(tok);
-                    else
-                        expr += tok;
-                }
-                if (it == token_iterator())
+            r.text = unformat_str_arg(format, it);
+            return r;
+        }
+        else if (!str.compare(0, 17, "ImRad::Translate("))
+        {
+            std::vector<std::string> args;
+            std::istringstream is((std::string)str.substr(17, str.size() - 17));
+            token_iterator it(is);
+            while (it != token_iterator()) {
+                if (is_cstr(*it))
+                    args.push_back(it->substr(1, it->size() - 2));
+                else
+                    args.push_back(*it);
+                ++it;
+                if (*it == ")")
                     break;
+                else if (*it == ",")
+                    ++it;
+            }
+            if (args.size() == 1) {
+                r.singular = args[0];
+            }
+            else if (args.size() == 2) {
+                r.context = args[0];
+                r.singular = args[1];
+            }
+            else if (args.size() == 3) {
+                r.singular = args[0];
+                r.plural = args[1];
+                r.pvar = args[2];
+            }
+            else if (args.size() == 4) {
+                r.context = args[0];
+                r.singular = args[1];
+                r.plural = args[2];
+                r.pvar = args[3];
+            }
+            else {
+                return error;
+            }
+            return r;
+        }
+        else if (!str.compare(0, 32, "ImRad::VFormat(ImRad::Translate(") &&
+            !str.compare(str.size() - 9, 9, ").c_str()"))
+        {
+            std::istringstream is((std::string)str.substr(32, str.size() - 32 - 9));
+            token_iterator it(is), ite;
+            int level = 0;
+            size_t endtr;
+            while (it != ite) {
+                if (*it == "(" || *it == "[" || *it == "{")
+                    ++level;
+                if (*it == ")" || *it == "]" || *it == "}") {
+                    if (--level < 0) {
+                        endtr = is.tellg();
+                        endtr += 32;
+                        ++it;
+                        break;
+                    }
+                }
                 ++it;
             }
-            str += unescape(format.substr(i));
-            return str;
+            if (it == ite)
+                return error;
+            r = parse_str_arg(str.substr(15, endtr - 15), directVar);
+            token_iterator it1 = it;
+            r.singular = unformat_str_arg(r.singular, it);
+            it = it1;
+            r.plural = unformat_str_arg(r.plural, it);
+            return r;
         }
         else
         {
             //direct variable
             if (!directVar && !str.compare(str.size() - 8, 8, ".c_str()")) //compatibility
                 str.remove_suffix(8);
-            return "{" + str + "}";
+            r.text = "{" + str + "}";
+            return r;
         }
     }
 
@@ -983,9 +1073,8 @@ namespace cpp
         return str;
     }
 
-    //generally allowDirectVal=false since we don't even know the type of the argument
-    //to decorate with c_str/to_string/etc
-    inline std::string to_str_arg(std::string_view str, bool allowDirectVar = false)
+    inline std::pair<std::string, std::string>
+        format_str_arg(std::string_view str)
     {
         std::string lit, fmt, args;
         for (size_t i = 0; i < str.size(); ++i)
@@ -1042,13 +1131,53 @@ namespace cpp
                 break;
             }
         }
-error:
+    error:
         if (args.empty())
-            return "\"" + lit + "\"";
-        else if (args.find(",") == std::string::npos && fmt == "{}" && allowDirectVar)
-            return args;
+            return { lit, "" };
         else
-            return "ImRad::Format(\"" + fmt + "\", " + args + ").c_str()";
+            return { fmt, args };
+    }
+
+    //generally allowDirectVal=false since we don't even know the type of the argument
+    //to decorate with c_str/to_string/etc
+    inline std::string to_str_arg(std::string_view str, bool allowDirectVar = false)
+    {
+        auto r = format_str_arg(str);
+        if (r.second.empty())
+            return "\"" + r.first + "\"";
+        else if (r.second.find(",") == std::string::npos && r.first == "{}" && allowDirectVar)
+            return r.second;
+        else
+            return "ImRad::Format(\"" + r.first + "\", " + r.second + ").c_str()";
+    }
+
+    inline std::string to_tr_arg(std::string_view context, std::string_view singular, std::string_view plural, std::string_view pvar, bool allowDirectVar = false)
+    {
+        auto rs = format_str_arg(singular);
+        auto rp = format_str_arg(plural);
+        std::ostringstream os;
+
+        if (plural != "" && rp.second != rs.second)
+            return INVALID_TEXT;
+
+        if (rs.second.find(",") == std::string::npos && rs.first == "{}" && allowDirectVar)
+            return rs.second;
+
+        if (!rs.second.empty())
+            os << "ImRad::VFormat(";
+
+        os << "ImRad::Translate(";
+        if (context != "")
+            os << "\"" << context << "\", ";
+        os << "\"" << rs.first << "\"";
+        if (plural != "")
+            os << ", \"" << rp.first << "\", " << pvar;
+        os << ")";
+
+        if (!rs.second.empty())
+            os << ", " << rs.second << ").c_str()";
+
+        return os.str();
     }
 
     inline std::pair<std::string, std::string> parse_size(const std::string& str)

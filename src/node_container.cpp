@@ -74,7 +74,7 @@ bool Table::ColumnData::PropertyUI(int i, UIContext& ctx)
         ImGui::Text("label");
         ImGui::TableNextColumn();
         ImGui::SetNextItemWidth(-ImGui::GetFrameHeight());
-        changed = InputDirectVal(&label, InputDirectVal_Modified, ctx);
+        changed = InputBindable(&label, InputBindable_Modified, ctx);
         break;
     case 2:
         ImGui::Text("sizingPolicy");
@@ -182,7 +182,7 @@ ImDrawList* Table::DoDraw(UIContext& ctx)
             float width = cd.width;
             if (cd.sizingPolicy & ImGuiTableColumnFlags_WidthFixed)
                 width *= ImRad::GetUserData().dpiScale;
-            ImGui::TableSetupColumn(cd.label.c_str(), cd.sizingPolicy | cd.flags, width);
+            ImGui::TableSetupColumn(cd.label.display_string().c_str(), cd.sizingPolicy | cd.flags, width);
             /*if (!cd.visible.empty())
                 ImGui::TableSetColumnEnabled(i, cd.visible.eval(ctx));*/
         }
@@ -876,6 +876,16 @@ void Table::DoImport(const cpp::stmt_iterator& sit, UIContext& ctx)
     }
 }
 
+bool Table::IsTranslated()
+{
+    if (header) {
+        for (const auto& cd : columnData)
+            if (!cd.label.has_tr() && !cd.label.has_single_variable())
+                return false;
+    };
+    return true;
+}
+
 //---------------------------------------------------------
 
 Child::Child(UIContext& ctx)
@@ -1458,9 +1468,9 @@ void Splitter::DoExport(std::ostream& os, UIContext& ctx)
     if (position.empty())
         PushError(ctx, "position is unassigned");
     if (children.empty() || position.empty() ||
-        (!stx::count(children[0]->size_x.used_variables(), position.value()) &&
-        !stx::count(children[0]->size_y.used_variables(), position.value())))
-        PushError(ctx, "first child doesn't reference \"" + position.value() + "\" in its size");
+        (!stx::count(children[0]->size_x.used_variables(), position.display_string()) &&
+        !stx::count(children[0]->size_y.used_variables(), position.display_string())))
+        PushError(ctx, "first child doesn't reference \"" + position.display_string() + "\" in its size");
 
     if (!style_bg.empty())
         os << ctx.ind << "ImGui::PushStyleColor(ImGuiCol_ChildBg, " << style_bg.to_arg() << ");\n";
@@ -1629,6 +1639,8 @@ std::unique_ptr<Widget> CollapsingHeader::Clone(UIContext& ctx)
 
 ImDrawList* CollapsingHeader::DoDraw(UIContext& ctx)
 {
+    if (ctx.showUntranslated && !IsTranslated())
+        ImGui::PushStyleColor(ImGuiCol_Text, ctx.colors[UIContext::Color::DrawArgs]);
     if (!style_header.empty())
         ImGui::PushStyleColor(ImGuiCol_Header, style_header.eval(ImGuiCol_Header, ctx));
     if (!style_hovered.empty())
@@ -1643,6 +1655,9 @@ ImDrawList* CollapsingHeader::DoDraw(UIContext& ctx)
         ImGui::SetNextItemOpen((bool)FindChild(ctx.selected[0]));
     }
     bool open = ImGui::CollapsingHeader(DRAW_STR(label), flags);
+
+    if (ctx.showUntranslated && !IsTranslated())
+        ImGui::PopStyleColor();
 
     //CustomSizerAdd
     Layout l = GetLayout(ctx);
@@ -1919,7 +1934,7 @@ ImDrawList* TreeNode::DoDraw(UIContext& ctx)
         ImGui::SetNextItemOpen((bool)FindChild(ctx.selected[0]));
     }
     lastOpen = false;
-    auto ps = PrepareString(label.value());
+    auto ps = PrepareString(label.display_string());
     bool open = ImGui::TreeNodeEx(ps.label.c_str(), flags);
 
     //CustomSizerAdd
@@ -1972,7 +1987,7 @@ void TreeNode::CalcSizeEx(ImVec2 p1, UIContext& ctx)
     }
     else
     {
-        cached_size.x = ImGui::CalcTextSize(label.c_str(), 0, true).x + 4 * sp.x;
+        cached_size.x = ImGui::CalcTextSize(label.display_string().c_str(), 0, true).x + 4 * sp.x;
     }
 
     if (lastOpen)
@@ -1991,7 +2006,7 @@ void TreeNode::DoExport(std::ostream& os, UIContext& ctx)
     if (!open.empty())
         os << ctx.ind << "ImGui::SetNextItemOpen(" << open.to_arg() << ");\n";
 
-    if (PrepareString(label.value()).error)
+    if (PrepareString(label.display_string()).error)
         PushError(ctx, "label is formatted wrongly");
 
     std::string varOpen = "tmpOpen" + std::to_string(ctx.varCounter++);
@@ -2514,19 +2529,24 @@ ImDrawList* TabItem::DoDraw(UIContext& ctx)
         //hack: ImGui::GetCurrentTabBar()->FramePadding.x = std::max(0.f, (tabw - w) / 2);
     }*/
 
+    if (ctx.showUntranslated && !IsTranslated())
+        ImGui::PushStyleColor(ImGuiCol_Text, ctx.colors[UIContext::Color::DrawArgs]);
+
     bool sel = ctx.selected.size() == 1 && FindChild(ctx.selected[0]);
     bool tmp = true;
-    if (ImGui::BeginTabItem(DRAW_STR(label), closeButton ? &tmp : nullptr, sel ? ImGuiTabItemFlags_SetSelected : 0))
-    {
-        //ImGui::GetCurrentTabBar()->FramePadding.x = padx;
+    bool open = ImGui::BeginTabItem(DRAW_STR(label), closeButton ? &tmp : nullptr, sel ? ImGuiTabItemFlags_SetSelected : 0);
 
+    if (ctx.showUntranslated && !IsTranslated())
+        ImGui::PopStyleColor();
+
+    //ImGui::GetCurrentTabBar()->FramePadding.x = padx;
+
+    if (open) {
         for (const auto& child : children)
             child->Draw(ctx);
 
         ImGui::EndTabItem();
     }
-    /*else
-        ImGui::GetCurrentTabBar()->FramePadding.x = padx;*/
 
     return ImGui::GetWindowDrawList();
 }
@@ -2656,7 +2676,7 @@ void TabItem::DoExport(std::ostream& os, UIContext& ctx)
         ctx.ind_up();
         /*if (idx != "") no need to activate, user can check itemCount.index
             os << ctx.ind << tb->activeTab.to_arg() << " = " << idx << ";\n";*/
-        os << ctx.ind << onClose.to_arg() << "();\n";
+        os << ctx.ind << onClose.to_arg() << ";\n";
         ctx.ind_down();
     }
 }
@@ -3071,7 +3091,7 @@ ImDrawList* MenuIt::DoDraw(UIContext& ctx)
         const UINode* par = ctx.parents[ctx.parents.size() - 2];
         bool mbm = dynamic_cast<const MenuBar*>(par); //menu bar item
 
-        ImGui::MenuItemEx(label.c_str(), icon.empty() ? nullptr : icon.c_str());
+        ImGui::MenuItemEx(label.display_string().c_str(), icon.empty() ? nullptr : icon.display_string().c_str());
 
         if (!mbm)
         {
@@ -3095,7 +3115,7 @@ ImDrawList* MenuIt::DoDraw(UIContext& ctx)
                 pos.y -= pad.y;
             }
             ImGui::SetNextWindowPos(pos);
-            std::string id = label + "##" + std::to_string((uintptr_t)this);
+            std::string id = label.display_string() + "##" + std::to_string((uintptr_t)this);
             ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1);
             ImGui::Begin(id.c_str(), nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoSavedSettings);
             {
@@ -3118,8 +3138,8 @@ ImDrawList* MenuIt::DoDraw(UIContext& ctx)
     else //menuItem
     {
         bool check = !checked.empty();
-        auto ps = PrepareString(label.value());
-        ImGui::MenuItemEx(ps.label.c_str(), icon.empty() ? nullptr : icon.c_str(), shortcut.c_str(), check);
+        auto ps = PrepareString(label.display_string().c_str());
+        ImGui::MenuItemEx(ps.label.c_str(), icon.empty() ? nullptr : icon.display_string().c_str(), shortcut.display_string().c_str(), check);
         DrawTextArgs(ps, ctx);
     }
     ImGui::PopStyleVar();
@@ -3197,7 +3217,7 @@ void MenuIt::CalcSizeEx(ImVec2 p1, UIContext& ctx)
     cached_pos = p1;
     const ImGuiMenuColumns* mc = &ImGui::GetCurrentWindow()->DC.MenuColumns;
     cached_pos.x += mc->OffsetLabel;
-    cached_size = ImGui::CalcTextSize(label.c_str(), nullptr, true);
+    cached_size = ImGui::CalcTextSize(label.display_string().c_str(), nullptr, true);
     cached_size.x += sp.x;
     if (mbm)
     {
@@ -3242,7 +3262,7 @@ void MenuIt::DoExport(std::ostream& os, UIContext& ctx)
     {
         if (onChange.empty())
             PushError(ctx, "ownerDraw is set but Draw event is not assigned!");
-        os << ctx.ind << onChange.to_arg() << "();\n";
+        os << ctx.ind << onChange.to_arg() << ";\n";
     }
     else
     {
@@ -3254,7 +3274,7 @@ void MenuIt::DoExport(std::ostream& os, UIContext& ctx)
             os << "ImGui::MenuItem(" << label.to_arg();
         else
             os << "ImGui::MenuItemEx(" << label.to_arg() << ", " << icon.to_arg();
-        os << ", \"" << shortcut.c_str() << "\", ";
+        os << ", \"" << shortcut.display_string() << "\", ";
         if (checked.is_reference())
             os << "&" << checked.to_arg();
         else if (!checked.empty())
@@ -3267,7 +3287,7 @@ void MenuIt::DoExport(std::ostream& os, UIContext& ctx)
         if (ifstmt) {
             os << ")\n";
             ctx.ind_up();
-            os << ctx.ind << onChange.to_arg() << "();\n";
+            os << ctx.ind << onChange.to_arg() << ";\n";
             ctx.ind_down();
         }
         else
@@ -3382,7 +3402,7 @@ bool MenuIt::PropertyUI(int i, UIContext& ctx)
         ImGui::Text("label");
         ImGui::TableNextColumn();
         ImGui::SetNextItemWidth(-ImGui::GetFrameHeight());
-        changed = InputDirectVal(&label, InputDirectVal_Modified, ctx);
+        changed = InputBindable(&label, InputBindable_Modified, ctx);
         ImGui::EndDisabled();
         break;
     case 2:

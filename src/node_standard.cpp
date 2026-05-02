@@ -106,7 +106,7 @@ void TextFontInfo(const bindable<font_name_t>& fontName, const bindable<float>& 
             fontName.to_arg("");
         if (!fontSize.empty()) {
             fname += ", ";
-            fname += fontSize.c_str();
+            fname += fontSize.display_string();
         }
         ImGui::TextUnformatted(fname.c_str());
     }
@@ -116,9 +116,9 @@ void TextFontInfo(const bindable<font_name_t>& fontName, const bindable<float>& 
 //1. limits length of lengthy {} expression (like in case it contains ?:)
 //2. formats {{, }} into {, }
 //3. errors out on incorrect format string
-PreparedString PrepareString(std::string_view s)
+PreparedString PrepareString(std::string_view s, bool limitLength)
 {
-    const int n = 25;
+    const int N = 25;
     PreparedString ps;
     ps.window = ImGui::GetCurrentWindow();
     ps.error = false;
@@ -154,8 +154,8 @@ PreparedString PrepareString(std::string_view s)
                     ps.error = true;
                     break;
                 }
-                if (i - argFrom > n) {
-                    ps.label += s.substr(argFrom, n - 3);
+                if (limitLength && i - argFrom > N) {
+                    ps.label += s.substr(argFrom, N - 3);
                     while (ps.label.back() < 0) //strip incomplete unicode char
                         ps.label.pop_back();
                     ps.label += "...}";
@@ -168,8 +168,16 @@ PreparedString PrepareString(std::string_view s)
                 argFrom = 0;
             }
         }
-        else if (!argFrom) {
+        else if (s[i] == '\n' || s[i] == '\t' || s[i] == ' ') {
+            if (argFrom) {
+                ps.error = true;
+                break;
+            }
             ps.label += s[i];
+        }
+        else {
+            if (!argFrom)
+                ps.label += s[i];
         }
     }
     if (argFrom)
@@ -206,8 +214,18 @@ void DrawTextArgs(const PreparedString& ps, UIContext& ctx, const ImVec2& offset
         else
             pos.y += ps.textBaseOffset;
 
+        float pos1x = pos.x;
         size_t i = 0;
         for (const auto& arg : ps.fmtArgs) {
+            size_t j = ps.label.find('\n', i);
+            while (j != std::string::npos && j < arg.first) {
+                i = j + 1;
+                pos.x = pos1x;
+                pos.y += ImGui::GetTextLineHeight();
+                j = ps.label.find('\n', i);
+            }
+            if (sz.y && pos.y + ImGui::GetTextLineHeight() > ps.pos.y + sz.y)
+                break;
             pos.x += ImGui::CalcTextSize(ps.label.data() + i, ps.label.data() + arg.first).x;
             if (sz.x && pos.x > ps.pos.x + sz.x)
                 break;
@@ -1132,7 +1150,9 @@ void Widget::Draw(UIContext& ctx)
 
     if (!style_fontName.empty() || !style_fontSize.empty())
         ImGui::PushFont(style_fontName.eval(ctx), style_fontSize.eval(ctx));
-    if (!style_text.empty())
+    if (ctx.showUntranslated && !IsTranslated() && children.empty()) //containers should draw on their own
+        ImGui::PushStyleColor(ImGuiCol_Text, ctx.colors[UIContext::Color::DrawArgs]);
+    else if (!style_text.empty())
         ImGui::PushStyleColor(ImGuiCol_Text, style_text.eval(ImGuiCol_Text, ctx));
     if (!style_border.empty())
         ImGui::PushStyleColor(ImGuiCol_Border, style_border.eval(ImGuiCol_Border, ctx));
@@ -1156,7 +1176,9 @@ void Widget::Draw(UIContext& ctx)
     ImGui::EndDisabled();
     CalcSizeEx(p1, ctx);
 
-    if (!style_text.empty())
+    if (ctx.showUntranslated && !IsTranslated() && children.empty())
+        ImGui::PopStyleColor();
+    else if (!style_text.empty())
         ImGui::PopStyleColor();
     if (!style_border.empty())
         ImGui::PopStyleColor();
@@ -1895,7 +1917,7 @@ void Widget::Export(std::ostream& os, UIContext& ctx)
         os << ctx.ind << "if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))\n";
         os << ctx.ind << "{\n";
         ctx.ind_up();
-        os << ctx.ind << onDragDropSource.c_str() << "();\n";
+        os << ctx.ind << onDragDropSource.to_arg() << ";\n";
         os << ctx.ind << "ImGui::EndDragDropSource();\n";
         ctx.ind_down();
         os << ctx.ind << "}\n";
@@ -1905,7 +1927,7 @@ void Widget::Export(std::ostream& os, UIContext& ctx)
         os << ctx.ind << "if (ImRad::IsItemLongPressed() && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))\n";
         os << ctx.ind << "{\n";
         ctx.ind_up();
-        os << ctx.ind << onDragDropSourceLongPressed.c_str() << "();\n";
+        os << ctx.ind << onDragDropSourceLongPressed.to_arg() << ";\n";
         os << ctx.ind << "ImGui::EndDragDropSource();\n";
         ctx.ind_down();
         os << ctx.ind << "}\n";
@@ -1925,7 +1947,7 @@ void Widget::Export(std::ostream& os, UIContext& ctx)
         os << ctx.ind << "if (ImGui::BeginDragDropTarget())\n";
         os << ctx.ind << "{\n";
         ctx.ind_up();
-        os << ctx.ind << onDragDropTarget.c_str() << "();\n";
+        os << ctx.ind << onDragDropTarget.to_arg() << ";\n";
         os << ctx.ind << "ImGui::EndDragDropTarget();\n";
         ctx.ind_down();
         os << ctx.ind << "}\n";
@@ -1934,7 +1956,7 @@ void Widget::Export(std::ostream& os, UIContext& ctx)
     {
         os << ctx.ind << "if (ImRad::IsItemContextMenuClicked())\n";
         ctx.ind_up();
-        os << ctx.ind << onItemContextMenuClicked.c_str() << "();\n";
+        os << ctx.ind << onItemContextMenuClicked.to_arg() << ";\n";
         ctx.ind_down();
     }
     if (!onItemLongPressed.empty())
@@ -1942,7 +1964,7 @@ void Widget::Export(std::ostream& os, UIContext& ctx)
         os << ctx.ind << "if (ImRad::IsItemLongPressed())\n";
         os << ctx.ind << "{\n";
         ctx.ind_up();
-        os << ctx.ind << onItemLongPressed.c_str() << "();\n";
+        os << ctx.ind << onItemLongPressed.to_arg() << ";\n";
         os << ctx.ind << "ImRad::GetUserData().longPressID = ImGui::GetItemID();\n";
         ctx.ind_down();
         os << ctx.ind << "}\n";
@@ -1951,49 +1973,49 @@ void Widget::Export(std::ostream& os, UIContext& ctx)
     {
         os << ctx.ind << "if (ImGui::IsItemHovered())\n";
         ctx.ind_up();
-        os << ctx.ind << onItemHovered.c_str() << "();\n";
+        os << ctx.ind << onItemHovered.to_arg() << ";\n";
         ctx.ind_down();
     }
     if (!onItemClicked.empty())
     {
         os << ctx.ind << "if (ImGui::IsItemClicked())\n";
         ctx.ind_up();
-        os << ctx.ind << onItemClicked.c_str() << "();\n";
+        os << ctx.ind << onItemClicked.to_arg() << ";\n";
         ctx.ind_down();
     }
     if (!onItemDoubleClicked.empty())
     {
         os << ctx.ind << "if (ImRad::IsItemDoubleClicked())\n";
         ctx.ind_up();
-        os << ctx.ind << onItemDoubleClicked.c_str() << "();\n";
+        os << ctx.ind << onItemDoubleClicked.to_arg() << ";\n";
         ctx.ind_down();
     }
     if (!onItemFocused.empty())
     {
         os << ctx.ind << "if (ImGui::IsItemFocused())\n";
         ctx.ind_up();
-        os << ctx.ind << onItemFocused.c_str() << "();\n";
+        os << ctx.ind << onItemFocused.to_arg() << ";\n";
         ctx.ind_down();
     }
     if (!onItemActivated.empty())
     {
         os << ctx.ind << "if (ImGui::IsItemActivated())\n";
         ctx.ind_up();
-        os << ctx.ind << onItemActivated.c_str() << "();\n";
+        os << ctx.ind << onItemActivated.to_arg() << ";\n";
         ctx.ind_down();
     }
     if (!onItemDeactivated.empty())
     {
         os << ctx.ind << "if (ImGui::IsItemDeactivated())\n";
         ctx.ind_up();
-        os << ctx.ind << onItemDeactivated.c_str() << "();\n";
+        os << ctx.ind << onItemDeactivated.to_arg() << ";\n";
         ctx.ind_down();
     }
     if (!onItemDeactivatedAfterEdit.empty())
     {
         os << ctx.ind << "if (ImGui::IsItemDeactivatedAfterEdit())\n";
         ctx.ind_up();
-        os << ctx.ind << onItemDeactivatedAfterEdit.c_str() << "();\n";
+        os << ctx.ind << onItemDeactivatedAfterEdit.to_arg() << ";\n";
         ctx.ind_down();
     }
 
@@ -2955,8 +2977,8 @@ void Widget::TreeUI(UIContext& ctx)
     std::string label, typeLabel;
     const auto props = Properties();
     for (const auto& p : props) {
-        if (p.kbdInput && p.property->c_str()) {
-            label = PrepareString(p.property->c_str()).label;
+        if (p.kbdInput && p.property->display_string() != "") {
+            label = PrepareString(p.property->display_string()).label;
             for (size_t i = 0; i < label.size(); ++i)
                 if (label[i] == '\n') {
                     label[i] = ' ';
@@ -3367,7 +3389,7 @@ ImDrawList* Text::DoDraw(UIContext& ctx)
         ImGui::PushTextWrapPos(wrapWidth);
     }
 
-    auto ps = PrepareString(text.value());
+    auto ps = PrepareString(text.display_string());
 
     if (link)
     {
@@ -3437,7 +3459,7 @@ int Text::Behavior()
 
 void Text::DoExport(std::ostream& os, UIContext& ctx)
 {
-    if (PrepareString(text.value()).error)
+    if (PrepareString(text.display_string()).error)
         PushError(ctx, "text is formatted wrongly");
 
     if (alignToFrame)
@@ -3467,7 +3489,7 @@ void Text::DoExport(std::ostream& os, UIContext& ctx)
         if (!onChange.empty())
         {
             ctx.ind_up();
-            os << ")\n" << ctx.ind << onChange.to_arg() << "();\n";
+            os << ")\n" << ctx.ind << onChange.to_arg() << ";\n";
             ctx.ind_down();
         }
         else
@@ -3531,8 +3553,7 @@ void Text::DoImport(const cpp::stmt_iterator& sit, UIContext& ctx)
     else if (sit->kind == cpp::CallExpr && sit->callee == "ImGui::TextUnformatted")
     {
         if (sit->params.size() >= 1) {
-            text.set_from_arg(sit->params[0]);
-            if (text.value() == cpp::INVALID_TEXT)
+            if (!text.set_from_arg(sit->params[0]))
                 PushError(ctx, "unable to parse text");
         }
     }
@@ -3541,8 +3562,7 @@ void Text::DoImport(const cpp::stmt_iterator& sit, UIContext& ctx)
     {
         link = true;
         if (sit->params.size() >= 1) {
-            text.set_from_arg(sit->params[0]);
-            if (text.value() == cpp::INVALID_TEXT)
+            if (!text.set_from_arg(sit->params[0]))
                 PushError(ctx, "unable to parse text");
         }
         if (sit->kind == cpp::IfCallThenCall)
@@ -3559,8 +3579,7 @@ void Text::DoImport(const cpp::stmt_iterator& sit, UIContext& ctx)
         if (sit->params.size() >= 2)
             size_x.set_from_arg(sit->params[1]);
         if (sit->params.size() >= 3) {
-            text.set_from_arg(sit->params[2]);
-            if (text.value() == cpp::INVALID_TEXT)
+            if (!text.set_from_arg(sit->params[2]))
                 PushError(ctx, "unable to parse text");
         }
     }
@@ -3752,7 +3771,7 @@ ImDrawList* Selectable::DoDraw(UIContext& ctx)
     ImVec2 size;
     size.x = size_x.eval_px(ImGuiAxis_X, ctx);
     size.y = size_y.eval_px(ImGuiAxis_Y, ctx);
-    auto ps = PrepareString(label.value());
+    auto ps = PrepareString(label.display_string());
     bool sel = selected.eval(ctx);
     int fl = flags | (staticOnly ? ImGuiSelectableFlags_Disabled : 0);
     ImRad::Selectable(ps.label.c_str(), sel, fl, size);
@@ -3819,7 +3838,7 @@ void Selectable::DoExport(std::ostream& os, UIContext& ctx)
     if (!onChange.empty() || closePopup)
         os << "if (";
 
-    if (PrepareString(label.value()).error)
+    if (PrepareString(label.display_string()).error)
         PushError(ctx, "label is formatted wrongly");
 
     os << "ImRad::Selectable(" << label.to_arg() << ", ";
@@ -3846,7 +3865,7 @@ void Selectable::DoExport(std::ostream& os, UIContext& ctx)
         ctx.ind_up();
 
         if (!onChange.empty())
-            os << ctx.ind << onChange.to_arg() << "();\n";
+            os << ctx.ind << onChange.to_arg() << ";\n";
         if (closePopup)
             os << ctx.ind << "ClosePopup(" << modalResult.to_arg() << ");\n";
 
@@ -4237,19 +4256,26 @@ int Button::Behavior()
 
 ImDrawList* Button::DoDraw(UIContext& ctx)
 {
+    auto ps = PrepareString(label.display_string());
+
     if (arrowDir != ImGuiDir_None)
         ImGui::ArrowButton("##", arrowDir);
     else if (small)
-        ImGui::SmallButton(DRAW_STR(label));
+    {
+        ImGui::SmallButton(ps.label.c_str());
+        DrawTextArgs(ps, ctx, { 0, 0 }, ImGui::GetItemRectSize(), { 0.5f, 0.5f });
+    }
     else
     {
         ImVec2 size;
         size.x = size_x.eval_px(ImGuiAxis_X, ctx);
         size.y = size_y.eval_px(ImGuiAxis_Y, ctx);
-        ImGui::Button(DRAW_STR(label), size);
+        ImGui::Button(ps.label.c_str(), size);
 
-        //if (ctx.modalPopup && text.value() == "OK")
-            //ImGui::SetItemDefaultFocus();
+        ImVec2 framePad;
+        if (!style_framePadding.empty())
+            framePad = style_framePadding;
+        DrawTextArgs(ps, ctx, framePad, ImGui::GetItemRectSize(), { 0.5f, 0.5f });
     }
 
     return ImGui::GetWindowDrawList();
@@ -4293,7 +4319,7 @@ void Button::DoExport(std::ostream& os, UIContext& ctx)
         ctx.ind_up();
 
         if (!onChange.empty())
-            os << ctx.ind << onChange.to_arg() << "();\n";
+            os << ctx.ind << onChange.to_arg() << ";\n";
         if (closePopup)
             os << ctx.ind << "ClosePopup(" << modalResult.to_arg() << ");\n";
         if (dropDownMenu != "")
@@ -4590,7 +4616,7 @@ ImDrawList* CheckBox::DoDraw(UIContext& ctx)
     if (!style_check.empty())
         ImGui::PushStyleColor(ImGuiCol_CheckMark, style_check.eval(ImGuiCol_CheckMark, ctx));
 
-    auto ps = PrepareString(label.value());
+    auto ps = PrepareString(label.display_string());
     bool val = checked.eval(ctx);
     ImGui::Checkbox(ps.label.c_str(), &val);
     ImVec2 offset{ ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x, ImGui::GetStyle().FramePadding.y };
@@ -4611,7 +4637,7 @@ void CheckBox::DoExport(std::ostream& os, UIContext& ctx)
     if (!onChange.empty())
         os << "if (";
 
-    if (PrepareString(label.value()).error)
+    if (PrepareString(label.display_string()).error)
         PushError(ctx, "label is formatted wrongly");
     if (checked.empty())
         PushError(ctx, "checked is unassigned");
@@ -4626,7 +4652,7 @@ void CheckBox::DoExport(std::ostream& os, UIContext& ctx)
     if (!onChange.empty()) {
         os << ")\n";
         ctx.ind_up();
-        os << ctx.ind << onChange.to_arg() << "();\n";
+        os << ctx.ind << onChange.to_arg() << ";\n";
         ctx.ind_down();
     }
     else {
@@ -4793,7 +4819,7 @@ ImDrawList* RadioButton::DoDraw(UIContext& ctx)
     if (!style_check.empty())
         ImGui::PushStyleColor(ImGuiCol_CheckMark, style_check.eval(ImGuiCol_CheckMark, ctx));
 
-    auto ps = PrepareString(label.value());
+    auto ps = PrepareString(label.display_string());
     bool checked = valueID == 0;
     if (!value.is_reference())
         checked = value.eval(ctx);
@@ -4816,7 +4842,7 @@ void RadioButton::DoExport(std::ostream& os, UIContext& ctx)
     if (!onChange.empty())
         os << "if (";
 
-    if (PrepareString(label.value()).error)
+    if (PrepareString(label.display_string()).error)
         PushError(ctx, "label is formatted wrongly");
     if (value.empty())
         PushError(ctx, "value is unassigned");
@@ -4832,7 +4858,7 @@ void RadioButton::DoExport(std::ostream& os, UIContext& ctx)
     if (!onChange.empty()) {
         os << ")\n";
         ctx.ind_up();
-        os << ctx.ind << onChange.to_arg() << "();\n";
+        os << ctx.ind << onChange.to_arg() << ";\n";
         ctx.ind_down();
     }
     else {
@@ -5082,6 +5108,11 @@ int Input::Behavior()
     return b;
 }
 
+bool Input::IsTranslated()
+{
+    return label.empty() && (hint.has_tr() || hint.has_single_variable() || hint.empty());
+}
+
 ImDrawList* Input::DoDraw(UIContext& ctx)
 {
     float ftmp[4] = {};
@@ -5099,7 +5130,7 @@ ImDrawList* Input::DoDraw(UIContext& ctx)
         if (tid == "int")
             stmp = "0";
         else if (tid == "float" || tid == "double") {
-            snprintf(buf, sizeof(buf), format.c_str(), 0.f);
+            snprintf(buf, sizeof(buf), format.access()->c_str(), 0.f);
             stmp = buf;
         }
     }
@@ -5163,11 +5194,11 @@ ImDrawList* Input::DoDraw(UIContext& ctx)
             DrawTextArgs(ps, ctx, ImGui::GetStyle().FramePadding, size);
         }
         else if (tid == "float2")
-            ImGui::InputFloat2(id.c_str(), ftmp, format.c_str());
+            ImGui::InputFloat2(id.c_str(), ftmp, format.access()->c_str());
         else if (tid == "float3")
-            ImGui::InputFloat3(id.c_str(), ftmp, format.c_str());
+            ImGui::InputFloat3(id.c_str(), ftmp, format.access()->c_str());
         else if (tid == "float4")
-            ImGui::InputFloat4(id.c_str(), ftmp, format.c_str());
+            ImGui::InputFloat4(id.c_str(), ftmp, format.access()->c_str());
         else if (tid == "double") {
             ImGui::InputScalar(id.c_str(), ImGuiDataType_Float, ftmp, fstep ? &fstep : nullptr, nullptr, ps.label.c_str());
             ImVec2 size = ImGui::GetItemRectSize();
@@ -5290,7 +5321,7 @@ void Input::DoExport(std::ostream& os, UIContext& ctx)
     else if (!onChange.empty()) {
         os << ")\n";
         ctx.ind_up();
-        os << ctx.ind << onChange.to_arg() << "();\n";
+        os << ctx.ind << onChange.to_arg() << ";\n";
         ctx.ind_down();
     }
     else {
@@ -5312,7 +5343,7 @@ void Input::DoExport(std::ostream& os, UIContext& ctx)
         os << ctx.ind << "if (ImRad::IsItemImeAction())\n";
         ctx.ind_up();
         //os << ctx.ind << "ImRad::GetUserData().imeActionPressed = false;\n";
-        os << ctx.ind << onImeAction.to_arg() << "();\n";
+        os << ctx.ind << onImeAction.to_arg() << ";\n";
         ctx.ind_down();
     }
 
@@ -5372,7 +5403,7 @@ void Input::DoImport(const cpp::stmt_iterator& sit, UIContext& ctx)
 
         size_t i = 0;
         if (sit->callee == "ImGui::InputTextWithHint") {
-            hint = cpp::parse_str_arg(sit->params[1]);
+            hint.set_from_arg(sit->params[1]);
             ++i;
         }
 
@@ -5619,9 +5650,9 @@ bool Input::PropertyUI(int i, UIContext& ctx)
         ImGui::SetNextItemWidth(-ImGui::GetFrameHeight());
         fl = type != Defaults().type ? InputDirectVal_Modified : 0;
         changed = InputDirectValEnum(&type, fl, ctx);
-        if (changed)
+        if (changed && value.has_single_variable())
         {
-            ctx.codeGen->ChangeVar(value.c_str(), type.get_id(), "");
+            ctx.codeGen->ChangeVar(value.used_variables()[0], type.get_id(), "");
         }
         break;
     case 11:
@@ -5778,7 +5809,7 @@ ImDrawList* Combo::DoDraw(UIContext& ctx)
         ImGui::SetNextItemWidth(w);
     std::string id = label;
     if (id.empty())
-        id = std::string("##") + value.c_str();
+        id = std::string("##") + std::to_string((uint64_t)&value);
 
     std::string tmp;
     if (ctx.beingResized)
@@ -5802,7 +5833,7 @@ void Combo::DoExport(std::ostream& os, UIContext& ctx)
 {
     std::string id = label.to_arg();
     if (label.empty())
-        id = std::string("\"##") + value.c_str() + "\"";
+        id = std::string("\"##") + std::to_string((uint64_t)&value) + "\"";
 
     if (!size_x.empty())
         os << ctx.ind << "ImGui::SetNextItemWidth(" << size_x.to_arg(ctx.unit, ctx.stretchSizeExpr[0]) << ");\n";
@@ -5819,7 +5850,7 @@ void Combo::DoExport(std::ostream& os, UIContext& ctx)
         if (!onChange.empty()) {
             os << ")\n";
             ctx.ind_up();
-            os << ctx.ind << onChange.to_arg() << "();\n";
+            os << ctx.ind << onChange.to_arg() << ";\n";
             ctx.ind_down();
         }
         else
@@ -5831,7 +5862,7 @@ void Combo::DoExport(std::ostream& os, UIContext& ctx)
             << value.to_arg() << ".c_str(), " << flags.to_arg() << "))\n";
         os << ctx.ind << "{\n";
         ctx.ind_up();
-        os << ctx.ind << onDrawItems.to_arg() << "();\n";
+        os << ctx.ind << onDrawItems.to_arg() << ";\n";
         os << ctx.ind << "ImGui::EndCombo();\n";
         ctx.ind_down();
         os << ctx.ind << "}\n";
@@ -5898,6 +5929,12 @@ void Combo::DoImport(const cpp::stmt_iterator& sit, UIContext& ctx)
         onDrawItems.set_from_arg(sit->callee);
     }
 }
+
+bool Combo::IsTranslated()
+{
+    return label.empty() && (items.has_tr() || items.has_single_variable());
+}
+
 
 std::vector<UINode::Prop>
 Combo::Properties()
@@ -6096,12 +6133,11 @@ ImDrawList* Slider::DoDraw(UIContext& ctx)
     if (w)
         ImGui::SetNextItemWidth(w);
 
-    const char* fmt = nullptr;
-    if (!format.empty())
-        fmt = format.c_str();
+    std::string sfmt = format;
+    const char* fmt = sfmt.empty() ? nullptr : sfmt.c_str();
     std::string id = label;
     if (label.empty())
-        id = "##" + *value.access();
+        id = "##" + std::to_string((uint64_t)&value);
     std::string tid = type.get_id();
     int fl = flags | ImGuiSliderFlags_NoInput;
 
@@ -6152,7 +6188,7 @@ void Slider::DoExport(std::ostream& os, UIContext& ctx)
     if (!onChange.empty()) {
         os << ")\n";
         ctx.ind_up();
-        os << ctx.ind << onChange.to_arg() << "();\n";
+        os << ctx.ind << onChange.to_arg() << ";\n";
         ctx.ind_down();
     }
     else {
@@ -6313,7 +6349,8 @@ bool Slider::PropertyUI(int i, UIContext& ctx)
         {
             changed = true;
             std::string tid = type.get_id();
-            ctx.codeGen->ChangeVar(value.c_str(), tid == "angle" ? "float" : tid, "");
+            if (value.has_single_variable())
+                ctx.codeGen->ChangeVar(value.used_variables()[0], tid == "angle" ? "float" : tid, "");
         }
         break;
     case 10:
@@ -6651,7 +6688,7 @@ void ColorEdit::DoExport(std::ostream& os, UIContext& ctx)
     if (!onChange.empty()) {
         os << ")\n";
         ctx.ind_up();
-        os << ctx.ind << onChange.to_arg() << "();\n";
+        os << ctx.ind << onChange.to_arg() << ";\n";
         ctx.ind_down();
     }
     else {
@@ -6787,7 +6824,7 @@ bool ColorEdit::PropertyUI(int i, UIContext& ctx)
         ImGui::TableNextColumn();
         ImGui::SetNextItemWidth(-ImGui::GetFrameHeight());
         ImGui::PushFont(type != Defaults().type ? ctx.pgbFont : ctx.pgFont);
-        if (ImGui::BeginCombo("##type", type.c_str()))
+        if (ImGui::BeginCombo("##type", type.display_string().c_str()))
         {
             ImGui::PopFont();
             ImGui::PushFont(ImGui::GetFont());
@@ -6796,7 +6833,8 @@ bool ColorEdit::PropertyUI(int i, UIContext& ctx)
                 if (ImGui::Selectable(tp, type == tp)) {
                     changed = true;
                     type = tp;
-                    ctx.codeGen->ChangeVar(value.c_str(), type, "");
+                    if (value.has_single_variable())
+                        ctx.codeGen->ChangeVar(value.used_variables()[0], type, "");
                 }
             }
             ImGui::EndCombo();
@@ -7075,7 +7113,7 @@ bool Image::PropertyUI(int i, UIContext& ctx)
             if (absoluteFileName.size())
                 ImGui::SetTooltip("Located in \"%s\"", absoluteFileName.c_str());
             else
-                ImGui::SetTooltip("Can't find \"%s\"", fileName.value().c_str());
+                ImGui::SetTooltip("Can't find \"%s\"", fileName.display_string().c_str());
             ImGui::PopStyleVar();
         }
         if (changed)
@@ -7202,7 +7240,7 @@ void Image::RefreshTexture(UIContext& ctx)
         return;
 
     std::string rname;
-    std::string fname = FindPath(fileName.value(), ctx, &rname);
+    std::string fname = FindPath(fileName.display_string(), ctx, &rname);
 
     if (fname.empty() && ctx.workingDir.empty() && !ctx.importState)
     {
@@ -7221,7 +7259,7 @@ void Image::RefreshTexture(UIContext& ctx)
 
     tex = ImRad::LoadTextureFromFile(absoluteFileName);
     if (!tex && ctx.importState)
-        PushError(ctx, "can't locate \"" + fileName.value() + "\"");
+        PushError(ctx, "can't locate \"" + fileName.display_string() + "\"");
 }
 
 //----------------------------------------------------
@@ -7254,7 +7292,7 @@ ImDrawList* CustomWidget::DoDraw(UIContext& ctx)
         dl->AddLine(cached_pos + ImVec2(0, cached_size.y), cached_pos + ImVec2(cached_size.x, 0), ImGui::ColorConvertFloat4ToU32(clr));
 
         ImGui::SetCursorScreenPos(cached_pos);
-        auto ps = PrepareString(label.value());
+        auto ps = PrepareString(label.display_string());
         ImVec2 sz = ImGui::CalcTextSize(ps.label.c_str());
         ImVec2 realSize = ImGui::CalcItemSize(size, size.x, size.y);
         ImVec2 pos{ 0.5f * (realSize.x - sz.x), 0.5f * (realSize.y - sz.y) };
@@ -7273,11 +7311,13 @@ void CustomWidget::DoExport(std::ostream& os, UIContext& ctx)
         PushError(ctx, "Draw event not set");
         return;
     }
-    os << ctx.ind << onDraw.to_arg() << "(ImRad::CustomWidgetArgs("
+    std::ostringstream oss;
+    oss << "ImRad::CustomWidgetArgs("
         << label.to_arg() << ", { "
         << size_x.to_arg(ctx.unit, ctx.stretchSizeExpr[0]) << ", "
         << size_y.to_arg(ctx.unit, ctx.stretchSizeExpr[1])
-        << " }));\n";
+        << " })";
+    os << ctx.ind << onDraw.to_arg(oss.str()) << ";\n";
 }
 
 void CustomWidget::DoImport(const cpp::stmt_iterator& sit, UIContext& ctx)
